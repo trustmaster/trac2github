@@ -1,0 +1,11 @@
+Features:
+- Converts milestones/tickets/comments
+- Converts Trac usernames to Github usernames
+- Sets assignees if possible, sets you an assignee otherwise
+- Supports manual splitting of conversion process into stages
+- Slows down to match the 60 requests per second API limit rate
+
+Usage:
+1. Edit the configuration variables in the file above the DO NOT EDIT BELOW comment.
+2. Run it from shell, e.g.:
+$ php trac2github.php
