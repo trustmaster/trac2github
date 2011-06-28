@@ -1,7 +1,7 @@
 <?php
 /**
  * @package trac2github
- * @version 1.0
+ * @version 1.0.1
  * @author Vladimir Sibirov
  * @copyright (c) Vladimir Sibirov 2011
  * @license BSD
@@ -83,8 +83,6 @@ if (!$skip_milestones) {
 			$error = print_r($resp, 1);
 			echo "Failed to convert milestone {$row['name']}: $error\n";
 		}
-		// 60 RPS max
-		sleep(1);
 	}
 	// Serialize to restore in future
 	file_put_contents($save_milestones, serialize($milestones));
@@ -113,8 +111,6 @@ if (!$skip_tickets) {
 			'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
 			'milestone' => $milestones[crc32($row['milestone'])]
 		));
-		// 60 RPS max
-		sleep(1);
 		if (isset($resp['number'])) {
 			// OK
 			$tickets[$row['id']] = (int) $resp['number'];
@@ -131,8 +127,6 @@ if (!$skip_tickets) {
 				if (isset($resp['number'])) {
 					echo "Closed issue #{$resp['number']}\n";
 				}
-				// 60 RPS max
-				sleep(1);
 			}
 
 		} else {
@@ -150,6 +144,7 @@ if (!$skip_comments) {
 	$limit = $comments_limit > 0 ? "LIMIT $comments_offset, $comments_limit" : '';
 	$res = $trac_db->query("SELECT * FROM `ticket_change` where `field` = 'comment' AND `newvalue` != '' ORDER BY `ticket`, `time` $limit");
 	foreach ($res->fetchAll() as $row) {
+		$text = strtolower($row['author']) == strtolower($username) ? $row['newvalue'] : '**Author: ' . $row['author'] . "**\n" . $row['newvalue'];
 		$resp = github_add_comment($tickets[$row['ticket']], $row['newvalue']);
 		if (isset($resp['url'])) {
 			// OK
@@ -159,8 +154,6 @@ if (!$skip_comments) {
 			$error = print_r($resp, 1);
 			echo "Failed to add a comment: $error\n";
 		}
-		// 60 RPS max
-		sleep(1);
 	}
 }
 
