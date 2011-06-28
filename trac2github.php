@@ -145,7 +145,7 @@ if (!$skip_comments) {
 	$res = $trac_db->query("SELECT * FROM `ticket_change` where `field` = 'comment' AND `newvalue` != '' ORDER BY `ticket`, `time` $limit");
 	foreach ($res->fetchAll() as $row) {
 		$text = strtolower($row['author']) == strtolower($username) ? $row['newvalue'] : '**Author: ' . $row['author'] . "**\n" . $row['newvalue'];
-		$resp = github_add_comment($tickets[$row['ticket']], $row['newvalue']);
+		$resp = github_add_comment($tickets[$row['ticket']], $text);
 		if (isset($resp['url'])) {
 			// OK
 			echo "Added comment {$resp['url']}\n";
