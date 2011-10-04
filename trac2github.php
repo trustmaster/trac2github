@@ -53,7 +53,7 @@ error_reporting(E_ALL ^ E_NOTICE);
 ini_set('display_errors', 1);
 set_time_limit(0);
 
-$trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqluser_trac, $mysqluser_trac, $mysqlpassword_trac);
+$trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
 
 echo 'Connected to Trac';
 
