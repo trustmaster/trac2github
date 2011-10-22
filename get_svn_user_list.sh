@@ -1,4 +1,4 @@
 #!/bin/sh
 
-git log --format='%aN' | sort -u > svn_users
+svn log | grep -E "^r[0-9]+ \| " | awk '{print $3}' | sort | uniq > svn_users
 
