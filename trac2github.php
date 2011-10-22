@@ -7,10 +7,11 @@
  * @license BSD
  */
 
+require("github.php");
+
 // Edit configuration below
 
-$username = 'Put your github username here';
-$password = 'Put your github password here';
+require("credentials.php");
 $project = 'Organization or User name';
 $repo = 'Repository name';
 
@@ -54,6 +55,7 @@ ini_set('display_errors', 1);
 set_time_limit(0);
 
 $trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
+$github = new Github($username, $password);
 
 echo 'Connected to Trac';
 
@@ -68,7 +70,7 @@ if (!$skip_milestones) {
 	$mnum = 1;
 	foreach ($res->fetchAll() as $row) {
 		//$milestones[$row['name']] = ++$mnum;
-		$resp = github_add_milestone(array(
+		$resp = $github->add_milestone(array(
 			'title' => $row['name'],
 			'state' => $row['completed'] == 0 ? 'open' : 'closed',
 			'description' => empty($row['description']) ? 'None' : $row['description'],
@@ -105,7 +107,7 @@ if (!$skip_tickets) {
 		if (empty($row['owner']) || !isset($users_list[$row['owner']])) {
 			$row['owner'] = $username;
 		}
-		$resp = github_add_issue(array(
+		$resp = $github->add_issue(array(
 			'title' => $row['summary'],
 			'body' => empty($row['description']) ? 'None' : $row['description'],
 			'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
@@ -117,7 +119,7 @@ if (!$skip_tickets) {
 			echo "Ticket #{$row['id']} converted to issue #{$resp['number']}\n";
 			if ($row['status'] == 'closed') {
 				// Close the issue
-				$resp = github_update_issue($resp['number'], array(
+				$resp = $github->update_issue($resp['number'], array(
 					'title' => $row['summary'],
 					'body' => empty($row['description']) ? 'None' : $row['description'],
 					'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
@@ -145,7 +147,7 @@ if (!$skip_comments) {
 	$res = $trac_db->query("SELECT * FROM `ticket_change` where `field` = 'comment' AND `newvalue` != '' ORDER BY `ticket`, `time` $limit");
 	foreach ($res->fetchAll() as $row) {
 		$text = strtolower($row['author']) == strtolower($username) ? $row['newvalue'] : '**Author: ' . $row['author'] . "**\n" . $row['newvalue'];
-		$resp = github_add_comment($tickets[$row['ticket']], $text);
+		$resp = $github->add_comment($tickets[$row['ticket']], $text);
 		if (isset($resp['url'])) {
 			// OK
 			echo "Added comment {$resp['url']}\n";
@@ -159,45 +161,4 @@ if (!$skip_comments) {
 
 echo "Done whatever possible, sorry if not.\n";
 
-function github_post($url, $json, $patch = false) {
-	global $username, $password;
-	$ch = curl_init();
-	curl_setopt($ch, CURLOPT_USERPWD, "$username:$password");
-	curl_setopt($ch, CURLOPT_URL, "https://api.github.com$url");
-	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-	curl_setopt($ch, CURLOPT_HEADER, false);
-	curl_setopt($ch, CURLOPT_POST, true);
-	curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
-	if ($patch) {
-		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
-	}
-	$ret = curl_exec($ch);
-	if(!$ret) { 
-        trigger_error(curl_error($ch)); 
-    } 
-	curl_close($ch);
-	return $ret;
-}
 
-function github_add_milestone($data) {
-	global $project, $repo;
-	return json_decode(github_post("/repos/$project/$repo/milestones", json_encode($data)), true);
-}
-
-function github_add_issue($data) {
-	global $project, $repo;
-	return json_decode(github_post("/repos/$project/$repo/issues", json_encode($data)), true);
-}
-
-function github_add_comment($issue, $body) {
-	global $project, $repo;
-	return json_decode(github_post("/repos/$project/$repo/issues/$issue/comments", json_encode(array('body' => $body))), true);
-}
-
-function github_update_issue($issue, $data) {
-	global $project, $repo;
-	return json_decode(github_post("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
-}
-
-?>
