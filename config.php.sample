@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * Sample configuration file, copy this to config.php and edit
+ */
+
+$repo = 'user/repo';
+
+Trac::$host = 'Trac MySQL host';
+Trac::$user = 'Trac MySQL user';
+Trac::$password = 'Trac MySQL password';
+Trac::$db = 'Trac MySQL database name';
+

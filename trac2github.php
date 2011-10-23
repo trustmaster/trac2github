@@ -1,54 +1,10 @@
 <?php
-/**
- * @package trac2github
- * @version 1.0.1
- * @author Vladimir Sibirov
- * @copyright (c) Vladimir Sibirov 2011
- * @license BSD
- */
 
 require("github.php");
+require("trac.php");
+require("config.php");
+require("ticket.php");
 
-// Edit configuration below
-
-require("credentials.php");
-$project = 'Organization or User name';
-$repo = 'Repository name';
-
-// All users must be valid github logins!
-$users_list = array(
-	'TracUsermame' => 'GithubUsername',
-	'Trustmaster' => 'trustmaster',
-	'John.Done' => 'johndoe'
-);
-
-$mysqlhost_trac = 'Trac MySQL host';
-$mysqluser_trac = 'Trac MySQL user';
-$mysqlpassword_trac = 'Trac MySQL password';
-$mysqldb_trac = 'Trac MySQL database name';
-
-// Do not convert milestones at this run
-$skip_milestones = false;
-
-// Do not convert tickets
-$skip_tickets = false;
-$ticket_offset = 0; // Start at this offset if limit > 0
-$ticket_limit = 0; // Max tickets per run if > 0
-
-// Do not convert comments
-$skip_comments = true;
-$comments_offset = 0; // Start at this offset if limit > 0
-$comments_limit = 0; // Max comments per run if > 0
-
-// Paths to milestone/ticket cache if you run it multiple times with skip/offset
-$save_milestones = '/tmp/trac_milestones.list';
-$save_tickets = '/tmp/trac_tickets.list';
-
-// Uncomment to refresh cache
-// @unlink($save_milestones);
-// @unlink($save_tickets);
-
-// DO NOT EDIT BELOW
 
 error_reporting(E_ALL ^ E_NOTICE);
 ini_set('display_errors', 1);
