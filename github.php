@@ -31,22 +31,22 @@ class Github {
    }
 
    public function add_milestone($data) {
-      return json_decode(github_post("/repos/$this->repo/milestones",
+      return json_decode($this->post("/repos/$this->repo/milestones",
          json_encode($data)), true);
    }
 
    public function add_issue($data) {
-      return json_decode(github_post("/repos/$this->repo/issues",
+      return json_decode($this->post("/repos/$this->repo/issues",
          json_encode($data)), true);
    }
 
    public function add_comment($issue, $body) {
-      return json_decode(github_post("/repos/$this->repo/issues/$issue/comments",
+      return json_decode($this->post("/repos/$this->repo/issues/$issue/comments",
          json_encode(array('body' => $body))), true);
    }
 
    public function update_issue($issue, $data) {
-      return json_decode(github_post("/repos/$this->repo/issues/$issue",
+      return json_decode($this->post("/repos/$this->repo/issues/$issue",
          json_encode($data), true), true);
    }
 }
