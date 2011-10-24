@@ -24,7 +24,8 @@ class Ticket {
          'title' => $this->attr['summary'],
          'body' => $this->translateDescription(),
          'assignee' => GitUsers::fromTrac($this->attr['owner']) ?: $this->attr['owner'],
-         'milestone' => Milestones::gitId($this->attr['milestone'])
+         'milestone' => Milestones::gitId($this->attr['milestone']),
+         'labels' => $this->getLabels()
       );
 
       return $json;
@@ -39,6 +40,22 @@ class Ticket {
 
    private function translateDescription() {
       // more on this later
-      return $this->attr['description'];
+      $desc = $this->attr['description'];
+      $desc = str_replace("\r\n", "\n", $desc);
+      return $dec;
+   }
+
+   private function getLabels() {
+      $labels = array();
+      if ($comp = $this->attr['component'])
+         $labels[] = "C-{$comp}";
+      if ($resolution = $this->attr['resolution'])
+         $labels[] = "R-{$resolution}";
+      if (($status = $this->attr['status']) && $status != 'closed' && $status != 'assigned')
+         $labels[] = $status;
+      if ($priority = $this->attr['priority'])
+         $labels[] = "P-{$priority}";
+
+      return $labels;
    }
 }
