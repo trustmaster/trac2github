@@ -5,9 +5,10 @@ class Github {
    private $username;
    private $password;
 
-   public function __construct($username, $password) {
+   public function __construct($username, $password, $repo) {
       $this->username = $username;
       $this->password = $password;
+      $this->repo = $repo;
    }
 
    public function post($url, $json, $patch = false) {

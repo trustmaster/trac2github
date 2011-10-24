@@ -8,7 +8,7 @@ class Ticket {
 
    public static function loadFromTrac($id) {
       $q_select = "SELECT * FROM `ticket` WHERE `id` = $id";
-      $result = Trac::execute($q_select);
+      $result = Trac::query($q_select);
       return $result ? new self($result) : null;
    }
 
