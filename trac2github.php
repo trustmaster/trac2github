@@ -2,8 +2,8 @@
 
 require("github.php");
 require("trac.php");
-require("config.php");
 require("ticket.php");
+require("config.php");
 
 
 error_reporting(E_ALL ^ E_NOTICE);

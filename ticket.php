@@ -12,7 +12,7 @@ class Ticket {
       return $result ? new self($result) : null;
    }
 
-   public __construct($dbAttributes) {
+   public function __construct($dbAttributes) {
       $this->attr = $dbAttributes;
       $this->id = $this->attr['id'];
    }
@@ -29,9 +29,9 @@ class Ticket {
    }
 
    public function saveToGithub() {
-      self::github->add_issue($this->toIssueJson());
+      self::$github->add_issue($this->toIssueJson());
       if ($this->$attr['status'] == 'closed') {
-         self::github->update_issue($this->id, array('state' => 'closed'));
+         self::$github->update_issue($this->id, array('state' => 'closed'));
       }
    }
 

@@ -1,15 +1,11 @@
 <?php
 
 class Trac {
-   public static $host;
-   public static $user;
-   public static $db;
-
    private static $db;
   
    public static function init($host, $dbname, $user, $password) {
       self::$db = new PDO(
-         'mysqlhost='.$host.
+         'mysql:host='.$host.
          ';dbname='.$dbname,
          $user,
          $password);
