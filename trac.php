@@ -16,4 +16,10 @@ class Trac {
 
       return $resultSet->fetchAll();
    }
+
+   public static function queryRow($statement) {
+      $resultSet = self::$db->query($statement);
+
+      return $resultSet->fetch();
+   }
 }

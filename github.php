@@ -25,8 +25,13 @@ class Github {
       }
       $ret = curl_exec($ch);
       if(!$ret) { 
-           trigger_error(curl_error($ch)); 
-       } 
+         trigger_error(curl_error($ch));
+      }
+
+      if (($code = curl_getinfo($ch, CURLINFO_HTTP_CODE)) && ($code < 200 || $code > 299)) {
+         fwrite(STDERR, "Unsuccessful API Request:\n". $ret);
+      }
+
       curl_close($ch);
       return $ret;
    }

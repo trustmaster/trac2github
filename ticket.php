@@ -1,4 +1,6 @@
 <?php
+require("git_users.php");
+require("milestones.php");
 
 class Ticket {
    public static $github;
@@ -8,7 +10,7 @@ class Ticket {
 
    public static function loadFromTrac($id) {
       $q_select = "SELECT * FROM `ticket` WHERE `id` = $id";
-      $result = Trac::query($q_select);
+      $result = Trac::queryRow($q_select);
       return $result ? new self($result) : null;
    }
 
@@ -22,7 +24,7 @@ class Ticket {
          'title' => $this->attr['summary'],
          'body' => $this->translateDescription(),
          'assignee' => GitUsers::fromTrac($this->attr['owner']) ?: $this->attr['owner'],
-         'milestone' => GitMilestones::fromTrac($this->attr['milestone'])
+         'milestone' => Milestones::gitId($this->attr['milestone'])
       );
 
       return $json;
@@ -30,7 +32,7 @@ class Ticket {
 
    public function saveToGithub() {
       self::$github->add_issue($this->toIssueJson());
-      if ($this->$attr['status'] == 'closed') {
+      if ($this->attr['status'] == 'closed') {
          self::$github->update_issue($this->id, array('state' => 'closed'));
       }
    }
