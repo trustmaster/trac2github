@@ -11,7 +11,7 @@ $github = new Github(
 
 Trac::init(
    $host = 'localhost',
+   $db = 'trac',
    $user = 'Trac MySQL user',
-   $password = 'Trac MySQL password',
-   $db = 'trac');
+   $password = 'Trac MySQL password');
 
