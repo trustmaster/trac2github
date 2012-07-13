@@ -44,6 +44,9 @@ $comments_limit = 0; // Max comments per run if > 0
 $save_milestones = '/tmp/trac_milestones.list';
 $save_tickets = '/tmp/trac_tickets.list';
 
+// Set this to true if you want to see the JSON output sent to GitHub
+$verbose = false;
+
 // Uncomment to refresh cache
 // @unlink($save_milestones);
 // @unlink($save_tickets);
@@ -184,22 +187,26 @@ function github_post($url, $json, $patch = false) {
 }
 
 function github_add_milestone($data) {
-	global $project, $repo;
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($data);
 	return json_decode(github_post("/repos/$project/$repo/milestones", json_encode($data)), true);
 }
 
 function github_add_issue($data) {
-	global $project, $repo;
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($data);
 	return json_decode(github_post("/repos/$project/$repo/issues", json_encode($data)), true);
 }
 
 function github_add_comment($issue, $body) {
-	global $project, $repo;
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($body);
 	return json_decode(github_post("/repos/$project/$repo/issues/$issue/comments", json_encode(array('body' => $body))), true);
 }
 
 function github_update_issue($issue, $data) {
-	global $project, $repo;
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($body);
 	return json_decode(github_post("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
 }
 
