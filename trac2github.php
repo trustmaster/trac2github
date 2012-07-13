@@ -30,6 +30,9 @@ $mysqldb_trac = 'Trac MySQL database name';
 // Do not convert milestones at this run
 $skip_milestones = false;
 
+// Do not convert labels at this run
+$skip_labels = false;
+
 // Do not convert tickets
 $skip_tickets = false;
 $ticket_offset = 0; // Start at this offset if limit > 0
@@ -49,6 +52,7 @@ $verbose = false;
 
 // Uncomment to refresh cache
 // @unlink($save_milestones);
+// @unlink($save_labels);
 // @unlink($save_tickets);
 
 // DO NOT EDIT BELOW
@@ -92,6 +96,53 @@ if (!$skip_milestones) {
 	file_put_contents($save_milestones, serialize($milestones));
 }
 
+$labels = array();
+$labels['T'] = array();
+$labels['C'] = array();
+$labels['P'] = array();
+$labels['R'] = array();
+if (file_exists($save_labels)) {
+	$labels = unserialize(file_get_contents($save_labels));
+}
+
+if (!$skip_labels) {
+    // Export all "labels"
+	$res = $trac_db->query("SELECT DISTINCT 'T' label_type, type       name, 'cccccc' color
+	                        FROM ticket WHERE IFNULL(type, '')       <> ''
+							UNION
+							SELECT DISTINCT 'C' label_type, component  name, '0000aa' color
+	                        FROM ticket WHERE IFNULL(component, '')  <> ''
+							UNION
+							SELECT DISTINCT 'P' label_type, priority   name, case when lower(priority) = 'urgent' then 'ff0000'
+							                                                      when lower(priority) = 'high'   then 'ff6666'
+																				  when lower(priority) = 'medium' then 'ffaaaa'
+																				  when lower(priority) = 'low'    then 'ffdddd'
+																				  else                                 'aa8888' end color
+	                        FROM ticket WHERE IFNULL(priority, '')   <> ''
+							UNION
+							SELECT DISTINCT 'R' label_type, resolution name, '55ff55' color
+	                        FROM ticket WHERE IFNULL(resolution, '') <> ''");
+
+	foreach ($res->fetchAll() as $row) {
+		$resp = github_add_label(array(
+			'name' => $row['label_type'] . ': ' . $row['name'],
+			'color' => $row['color']
+		));
+
+		if (isset($resp['url'])) {
+			// OK
+			$labels[$row['label_type']][crc32($row['name'])] = $resp['name'];
+			echo "Label {$row['name']} converted to {$resp['name']}\n";
+		} else {
+			// Error
+			$error = print_r($resp, 1);
+			echo "Failed to convert label {$row['name']}: $error\n";
+		}
+	}
+	// Serialize to restore in future
+	file_put_contents($save_labels, serialize($labels));
+}
+
 // Try get previously fetched tickets
 $tickets = array();
 if (file_exists($save_tickets)) {
@@ -109,13 +160,27 @@ if (!$skip_tickets) {
 		if (empty($row['owner']) || !isset($users_list[$row['owner']])) {
 			$row['owner'] = $username;
 		}
+		$ticketLabels = array();
+		if (!empty($labels['T'][crc32($row['type'])])) {
+		    $ticketLabels[] = $labels['T'][crc32($row['type'])];
+		}
+		if (!empty($labels['C'][crc32($row['component'])])) {
+		    $ticketLabels[] = $labels['C'][crc32($row['component'])];
+		}
+		if (!empty($labels['P'][crc32($row['priority'])])) {
+		    $ticketLabels[] = $labels['P'][crc32($row['priority'])];
+		}
+		if (!empty($labels['R'][crc32($row['resolution'])])) {
+		    $ticketLabels[] = $labels['R'][crc32($row['resolution'])];
+		}
 
         // There is a strange issue with summaries containing percent signs...
 		$resp = github_add_issue(array(
 			'title' => preg_replace("/%/", '[pct]', $row['summary']),
 			'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
 			'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
-			'milestone' => $milestones[crc32($row['milestone'])]
+			'milestone' => $milestones[crc32($row['milestone'])],
+			'labels' => $ticketLabels
 		));
 		if (isset($resp['number'])) {
 			// OK
@@ -128,6 +193,7 @@ if (!$skip_tickets) {
 					'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
 					'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
 					'milestone' => $milestones[crc32($row['milestone'])],
+					'labels' => $ticketLabels,
 					'state' => 'closed'
 				));
 				if (isset($resp['number'])) {
@@ -190,6 +256,12 @@ function github_add_milestone($data) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($data);
 	return json_decode(github_post("/repos/$project/$repo/milestones", json_encode($data)), true);
+}
+
+function github_add_label($data) {
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($data);
+	return json_decode(github_post("/repos/$project/$repo/labels", json_encode($data)), true);
 }
 
 function github_add_issue($data) {
