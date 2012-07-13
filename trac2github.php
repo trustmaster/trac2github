@@ -1,8 +1,9 @@
 <?php
 /**
  * @package trac2github
- * @version 1.0.1
+ * @version 1.1
  * @author Vladimir Sibirov
+ * @author Lukas Eder
  * @copyright (c) Vladimir Sibirov 2011
  * @license BSD
  */
@@ -29,6 +30,9 @@ $mysqldb_trac = 'Trac MySQL database name';
 // Do not convert milestones at this run
 $skip_milestones = false;
 
+// Do not convert labels at this run
+$skip_labels = false;
+
 // Do not convert tickets
 $skip_tickets = false;
 $ticket_offset = 0; // Start at this offset if limit > 0
@@ -43,8 +47,12 @@ $comments_limit = 0; // Max comments per run if > 0
 $save_milestones = '/tmp/trac_milestones.list';
 $save_tickets = '/tmp/trac_tickets.list';
 
+// Set this to true if you want to see the JSON output sent to GitHub
+$verbose = false;
+
 // Uncomment to refresh cache
 // @unlink($save_milestones);
+// @unlink($save_labels);
 // @unlink($save_tickets);
 
 // DO NOT EDIT BELOW
@@ -55,7 +63,7 @@ set_time_limit(0);
 
 $trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
 
-echo 'Connected to Trac';
+echo "Connected to Trac\n";
 
 $milestones = array();
 if (file_exists($save_milestones)) {
@@ -88,6 +96,53 @@ if (!$skip_milestones) {
 	file_put_contents($save_milestones, serialize($milestones));
 }
 
+$labels = array();
+$labels['T'] = array();
+$labels['C'] = array();
+$labels['P'] = array();
+$labels['R'] = array();
+if (file_exists($save_labels)) {
+	$labels = unserialize(file_get_contents($save_labels));
+}
+
+if (!$skip_labels) {
+    // Export all "labels"
+	$res = $trac_db->query("SELECT DISTINCT 'T' label_type, type       name, 'cccccc' color
+	                        FROM ticket WHERE IFNULL(type, '')       <> ''
+							UNION
+							SELECT DISTINCT 'C' label_type, component  name, '0000aa' color
+	                        FROM ticket WHERE IFNULL(component, '')  <> ''
+							UNION
+							SELECT DISTINCT 'P' label_type, priority   name, case when lower(priority) = 'urgent' then 'ff0000'
+							                                                      when lower(priority) = 'high'   then 'ff6666'
+																				  when lower(priority) = 'medium' then 'ffaaaa'
+																				  when lower(priority) = 'low'    then 'ffdddd'
+																				  else                                 'aa8888' end color
+	                        FROM ticket WHERE IFNULL(priority, '')   <> ''
+							UNION
+							SELECT DISTINCT 'R' label_type, resolution name, '55ff55' color
+	                        FROM ticket WHERE IFNULL(resolution, '') <> ''");
+
+	foreach ($res->fetchAll() as $row) {
+		$resp = github_add_label(array(
+			'name' => $row['label_type'] . ': ' . $row['name'],
+			'color' => $row['color']
+		));
+
+		if (isset($resp['url'])) {
+			// OK
+			$labels[$row['label_type']][crc32($row['name'])] = $resp['name'];
+			echo "Label {$row['name']} converted to {$resp['name']}\n";
+		} else {
+			// Error
+			$error = print_r($resp, 1);
+			echo "Failed to convert label {$row['name']}: $error\n";
+		}
+	}
+	// Serialize to restore in future
+	file_put_contents($save_labels, serialize($labels));
+}
+
 // Try get previously fetched tickets
 $tickets = array();
 if (file_exists($save_tickets)) {
@@ -105,11 +160,27 @@ if (!$skip_tickets) {
 		if (empty($row['owner']) || !isset($users_list[$row['owner']])) {
 			$row['owner'] = $username;
 		}
+		$ticketLabels = array();
+		if (!empty($labels['T'][crc32($row['type'])])) {
+		    $ticketLabels[] = $labels['T'][crc32($row['type'])];
+		}
+		if (!empty($labels['C'][crc32($row['component'])])) {
+		    $ticketLabels[] = $labels['C'][crc32($row['component'])];
+		}
+		if (!empty($labels['P'][crc32($row['priority'])])) {
+		    $ticketLabels[] = $labels['P'][crc32($row['priority'])];
+		}
+		if (!empty($labels['R'][crc32($row['resolution'])])) {
+		    $ticketLabels[] = $labels['R'][crc32($row['resolution'])];
+		}
+
+        // There is a strange issue with summaries containing percent signs...
 		$resp = github_add_issue(array(
-			'title' => $row['summary'],
-			'body' => empty($row['description']) ? 'None' : $row['description'],
+			'title' => preg_replace("/%/", '[pct]', $row['summary']),
+			'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
 			'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
-			'milestone' => $milestones[crc32($row['milestone'])]
+			'milestone' => $milestones[crc32($row['milestone'])],
+			'labels' => $ticketLabels
 		));
 		if (isset($resp['number'])) {
 			// OK
@@ -118,10 +189,11 @@ if (!$skip_tickets) {
 			if ($row['status'] == 'closed') {
 				// Close the issue
 				$resp = github_update_issue($resp['number'], array(
-					'title' => $row['summary'],
-					'body' => empty($row['description']) ? 'None' : $row['description'],
+					'title' => preg_replace("/%/", '[pct]', $row['summary']),
+					'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
 					'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
 					'milestone' => $milestones[crc32($row['milestone'])],
+					'labels' => $ticketLabels,
 					'state' => 'closed'
 				));
 				if (isset($resp['number'])) {
@@ -145,7 +217,7 @@ if (!$skip_comments) {
 	$res = $trac_db->query("SELECT * FROM `ticket_change` where `field` = 'comment' AND `newvalue` != '' ORDER BY `ticket`, `time` $limit");
 	foreach ($res->fetchAll() as $row) {
 		$text = strtolower($row['author']) == strtolower($username) ? $row['newvalue'] : '**Author: ' . $row['author'] . "**\n" . $row['newvalue'];
-		$resp = github_add_comment($tickets[$row['ticket']], $text);
+		$resp = github_add_comment($tickets[$row['ticket']], translate_markup($text));
 		if (isset($resp['url'])) {
 			// OK
 			echo "Added comment {$resp['url']}\n";
@@ -181,23 +253,45 @@ function github_post($url, $json, $patch = false) {
 }
 
 function github_add_milestone($data) {
-	global $project, $repo;
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($data);
 	return json_decode(github_post("/repos/$project/$repo/milestones", json_encode($data)), true);
 }
 
+function github_add_label($data) {
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($data);
+	return json_decode(github_post("/repos/$project/$repo/labels", json_encode($data)), true);
+}
+
 function github_add_issue($data) {
-	global $project, $repo;
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($data);
 	return json_decode(github_post("/repos/$project/$repo/issues", json_encode($data)), true);
 }
 
 function github_add_comment($issue, $body) {
-	global $project, $repo;
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($body);
 	return json_decode(github_post("/repos/$project/$repo/issues/$issue/comments", json_encode(array('body' => $body))), true);
 }
 
 function github_update_issue($issue, $data) {
-	global $project, $repo;
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($body);
 	return json_decode(github_post("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
+}
+
+function translate_markup($data) {
+    // Replace code blocks with an associated language
+    $data = preg_replace('/\{\{\{(\s*#!(\w+))?/m', '```$2', $data);
+    $data = preg_replace('/\}\}\}/', '```', $data);
+
+    // Avoid non-ASCII characters, as that will cause trouble with json_encode()
+	$data = preg_replace('/[^(\x00-\x7F)]*/','', $data);
+
+    // Possibly translate other markup as well?
+    return $data;
 }
 
 ?>

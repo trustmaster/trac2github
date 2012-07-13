@@ -1,5 +1,5 @@
 Features:
-- Converts milestones/tickets/comments
+- Converts milestones/tickets/comments/labels
 - Converts Trac usernames to Github usernames
 - Sets assignees if possible, sets you an assignee otherwise
 - Supports manual splitting of conversion process into stages
