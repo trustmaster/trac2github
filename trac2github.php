@@ -1,8 +1,9 @@
 <?php
 /**
  * @package trac2github
- * @version 1.0.1
+ * @version 1.1
  * @author Vladimir Sibirov
+ * @author Lukas Eder
  * @copyright (c) Vladimir Sibirov 2011
  * @license BSD
  */
