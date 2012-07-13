@@ -55,7 +55,7 @@ set_time_limit(0);
 
 $trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
 
-echo 'Connected to Trac';
+echo "Connected to Trac\n";
 
 $milestones = array();
 if (file_exists($save_milestones)) {
