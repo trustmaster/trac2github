@@ -106,9 +106,11 @@ if (!$skip_tickets) {
 		if (empty($row['owner']) || !isset($users_list[$row['owner']])) {
 			$row['owner'] = $username;
 		}
+
+        // There is a strange issue with summaries containing percent signs...
 		$resp = github_add_issue(array(
-			'title' => $row['summary'],
-			'body' => empty($row['description']) ? 'None' : $row['description'],
+			'title' => preg_replace("/%/", '[pct]', $row['summary']),
+			'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
 			'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
 			'milestone' => $milestones[crc32($row['milestone'])]
 		));
@@ -119,8 +121,8 @@ if (!$skip_tickets) {
 			if ($row['status'] == 'closed') {
 				// Close the issue
 				$resp = github_update_issue($resp['number'], array(
-					'title' => $row['summary'],
-					'body' => empty($row['description']) ? 'None' : $row['description'],
+					'title' => preg_replace("/%/", '[pct]', $row['summary']),
+					'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
 					'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
 					'milestone' => $milestones[crc32($row['milestone'])],
 					'state' => 'closed'
@@ -146,7 +148,7 @@ if (!$skip_comments) {
 	$res = $trac_db->query("SELECT * FROM `ticket_change` where `field` = 'comment' AND `newvalue` != '' ORDER BY `ticket`, `time` $limit");
 	foreach ($res->fetchAll() as $row) {
 		$text = strtolower($row['author']) == strtolower($username) ? $row['newvalue'] : '**Author: ' . $row['author'] . "**\n" . $row['newvalue'];
-		$resp = github_add_comment($tickets[$row['ticket']], $text);
+		$resp = github_add_comment($tickets[$row['ticket']], translate_markup($text));
 		if (isset($resp['url'])) {
 			// OK
 			echo "Added comment {$resp['url']}\n";
@@ -199,6 +201,18 @@ function github_add_comment($issue, $body) {
 function github_update_issue($issue, $data) {
 	global $project, $repo;
 	return json_decode(github_post("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
+}
+
+function translate_markup($data) {
+    // Replace code blocks with an associated language
+    $data = preg_replace('/\{\{\{(\s*#!(\w+))?/m', '```$2', $data);
+    $data = preg_replace('/\}\}\}/', '```', $data);
+
+    // Avoid non-ASCII characters, as that will cause trouble with json_encode()
+	$data = preg_replace('/[^(\x00-\x7F)]*/','', $data);
+
+    // Possibly translate other markup as well?
+    return $data;
 }
 
 ?>
