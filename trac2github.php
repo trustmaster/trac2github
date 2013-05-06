@@ -241,6 +241,7 @@ function github_post($url, $json, $patch = false) {
 	curl_setopt($ch, CURLOPT_HEADER, false);
 	curl_setopt($ch, CURLOPT_POST, true);
 	curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
+	curl_setopt($ch, CURLOPT_USERAGENT, "trac2github for $project, admin@example.com");
 	if ($patch) {
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
 	}
