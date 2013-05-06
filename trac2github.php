@@ -14,6 +14,7 @@ $username = 'Put your github username here';
 $password = 'Put your github password here';
 $project = 'Organization or User name';
 $repo = 'Repository name';
+$tracurl = 'http://trac.example.com/trac';
 
 // All users must be valid github logins!
 $users_list = array(
@@ -42,6 +43,11 @@ $ticket_limit = 0; // Max tickets per run if > 0
 $skip_comments = true;
 $comments_offset = 0; // Start at this offset if limit > 0
 $comments_limit = 0; // Max comments per run if > 0
+
+// Do not convert attachments
+$skip_attachments = false;
+$attachments_offset = 0;
+$attachments_limit =0;
 
 // Paths to milestone/ticket cache if you run it multiple times with skip/offset
 $save_milestones = '/tmp/trac_milestones.list';
@@ -211,6 +217,37 @@ if (!$skip_tickets) {
 	file_put_contents($save_tickets, serialize($tickets));
 }
 
+if (!$skip_attachments) {
+	// Export all attachments
+	echo "Converting attachments\n";
+	$limit = $attachments_limit > 0 ? "LIMIT $attachments_offset, $attachments_limit" : '';
+	$res = $trac_db->query("SELECT rowid,* FROM `attachment` where `type` = 'ticket' ORDER BY `id`, `time` $limit");
+	foreach ($res->fetchAll() as $row) {
+		$text = strtolower($row['author']) == strtolower($username) ? $row['newvalue'] : '**Author: ' . $row['author'] . "**\n" . $row['newvalue'];
+		// function github_add_attachment($issue, $title, $name, $body) {
+		$aurl = $tracurl."/raw-attachment/ticket/".$row['id']."/".$row['filename'];
+		$body = file_get_contents($aurl);
+		$resp = github_add_attachment($row['description'], $row['filename'], $body);
+		if (isset($resp['html_url'])) {
+			// OK
+			echo "Added attachment {$resp['html_url']}\n";
+		} else {
+			// Error
+			$error = print_r($resp, 1);
+			echo "Failed to add an attachment (".$row['rowid']."): $error\n";
+		}
+		$resp = github_add_comment($tickets[$row['id']], "Attachment '".$row['description']."' (".$row['filename'].") ".$resp['html_url']);
+		if (isset($resp['url'])) {
+			// OK
+			echo "Added comment {$resp['url']}\n";
+		} else {
+			// Error
+			$error = print_r($resp, 1);
+			echo "Failed to add a comment: $error\n";
+		}
+	}
+}
+
 if (!$skip_comments) {
 	// Export all comments
 	$limit = $comments_limit > 0 ? "LIMIT $comments_offset, $comments_limit" : '';
@@ -274,6 +311,13 @@ function github_add_comment($issue, $body) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($body);
 	return json_decode(github_post("/repos/$project/$repo/issues/$issue/comments", json_encode(array('body' => $body))), true);
+}
+
+function github_add_attachment($title, $name, $body) {
+	global $project, $repo, $verbose;
+	$post = json_encode(array('description' => $title, 'public' => true, 'files' => array($name => array('content' => $body))));
+	if ($verbose) print_r($post);
+	return json_decode(github_post("/gists", $post), true);
 }
 
 function github_update_issue($issue, $data) {
