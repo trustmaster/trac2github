@@ -27,6 +27,9 @@ $mysqluser_trac = 'Trac MySQL user';
 $mysqlpassword_trac = 'Trac MySQL password';
 $mysqldb_trac = 'Trac MySQL database name';
 
+// Path to SQLite database file
+$sqlite_trac_path = '/path/to/trac.db';
+
 // Do not convert milestones at this run
 $skip_milestones = false;
 
@@ -61,7 +64,12 @@ error_reporting(E_ALL ^ E_NOTICE);
 ini_set('display_errors', 1);
 set_time_limit(0);
 
-$trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
+if (file_exists($sqlite_trac_path)) {
+	$trac_db = new PDO('sqlite:'.$sqlite_trac_path);
+}
+else {
+	$trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
+}
 
 echo "Connected to Trac\n";
 
