@@ -157,11 +157,16 @@ if (!$skip_labels) {
 	                        SELECT DISTINCT 'C' AS label_type, component AS name, '0000aa' AS color
 	                        FROM ticket WHERE COALESCE (component, '')  <> ''
 	                        UNION
-	                        SELECT DISTINCT 'P' AS label_type, priority AS name, case when lower(priority) = 'urgent' then 'ff0000'
-	                                                                                  when lower(priority) = 'high'   then 'ff6666'
-	                                                                                  when lower(priority) = 'medium' then 'ffaaaa'
-	                                                                                  when lower(priority) = 'low'    then 'ffdddd'
-	                                                                                  else                                 'aa8888' end color
+	                        SELECT DISTINCT 'P' AS label_type, priority AS name, case when lower(priority) = 'urgent'   then 'ff0000'
+	                                                                                  when lower(priority) = 'high'     then 'ff6666'
+	                                                                                  when lower(priority) = 'medium'   then 'ffaaaa'
+	                                                                                  when lower(priority) = 'low'      then 'ffdddd'
+	                                                                                  when lower(priority) = 'blocker'  then 'ffc7f8'
+	                                                                                  when lower(priority) = 'critical' then 'ffffb8'
+	                                                                                  when lower(priority) = 'major'    then 'f6f6f6'
+	                                                                                  when lower(priority) = 'minor'    then 'dcffff'
+	                                                                                  when lower(priority) = 'trivial'  then 'dce7ff'
+	                                                                                  else                                   'aa8888' end color
 	                        FROM ticket WHERE COALESCE(priority, '')   <> ''
 	                        UNION
 	                        SELECT DISTINCT 'R' AS label_type, resolution AS name, '55ff55' AS color
