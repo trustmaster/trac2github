@@ -182,10 +182,12 @@ if (!$skip_tickets) {
 		    $ticketLabels[] = $labels['R'][crc32($row['resolution'])];
 		}
 
+		$body = make_body($row['description']);
+
         // There is a strange issue with summaries containing percent signs...
 		$resp = github_add_issue(array(
 			'title' => preg_replace("/%/", '[pct]', $row['summary']),
-			'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
+			'body' => $body,
 			'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
 			'milestone' => $milestones[crc32($row['milestone'])],
 			'labels' => $ticketLabels
@@ -198,7 +200,7 @@ if (!$skip_tickets) {
 				// Close the issue
 				$resp = github_update_issue($resp['number'], array(
 					'title' => preg_replace("/%/", '[pct]', $row['summary']),
-					'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
+					'body' => $body,
 					'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
 					'milestone' => $milestones[crc32($row['milestone'])],
 					'labels' => $ticketLabels,
@@ -289,6 +291,10 @@ function github_update_issue($issue, $data) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($body);
 	return json_decode(github_post("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
+}
+
+function make_body($description) {
+	return empty($description) ? 'None' : translate_markup($description);
 }
 
 function translate_markup($data) {
