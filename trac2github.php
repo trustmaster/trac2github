@@ -10,25 +10,36 @@
 
 // Edit configuration below
 
-$username = 'Put your github username here';
-$password = 'Put your github password here';
-$project = 'Organization or User name';
-$repo = 'Repository name';
+$username   = 'Put your github username here';
+$password   = 'Put your github password here';
+$project    = 'Organization or User name';
+$repo       = 'Organization or User name';
 
 // All users must be valid github logins!
 $users_list = array(
-	'TracUsermame' => 'GithubUsername',
-	'Trustmaster' => 'trustmaster',
-	'John.Done' => 'johndoe'
+    'TracUsermame' => 'GithubUsername',
+    'Trustmaster' => 'trustmaster',
+    'John.Done' => 'johndoe'
 );
 
-$mysqlhost_trac = 'Trac MySQL host';
-$mysqluser_trac = 'Trac MySQL user';
+// The PDO driver name to use.
+// Options are: 'mysql', 'sqlite', 'pgsql'
+$pdo_driver = 'mysql';
+
+// MySQL connection info
+$mysqlhost_trac     = 'Trac MySQL host';
+$mysqluser_trac     = 'Trac MySQL user';
 $mysqlpassword_trac = 'Trac MySQL password';
-$mysqldb_trac = 'Trac MySQL database name';
+$mysqldb_trac       = 'Trac MySQL database name';
 
 // Path to SQLite database file
 $sqlite_trac_path = '/path/to/trac.db';
+
+// Postgresql connection info
+$pgsql_host     = 'localhost';
+$pgsql_dbname   = 'Postgres database name';
+$pgsql_user     = 'Postgres user name';
+$pgsql_password = 'Postgres password';
 
 // Do not convert milestones at this run
 $skip_milestones = false;
@@ -37,14 +48,14 @@ $skip_milestones = false;
 $skip_labels = false;
 
 // Do not convert tickets
-$skip_tickets = false;
-$ticket_offset = 0; // Start at this offset if limit > 0
-$ticket_limit = 0; // Max tickets per run if > 0
+$skip_tickets   = false;
+$ticket_offset  = 0; // Start at this offset if limit > 0
+$ticket_limit   = 0; // Max tickets per run if > 0
 
 // Do not convert comments
-$skip_comments = true;
+$skip_comments   = true;
 $comments_offset = 0; // Start at this offset if limit > 0
-$comments_limit = 0; // Max comments per run if > 0
+$comments_limit  = 0; // Max comments per run if > 0
 
 // Paths to milestone/ticket cache if you run it multiple times with skip/offset
 $save_milestones = '/tmp/trac_milestones.list';
@@ -64,12 +75,33 @@ error_reporting(E_ALL ^ E_NOTICE);
 ini_set('display_errors', 1);
 set_time_limit(0);
 
-if (file_exists($sqlite_trac_path)) {
-	$trac_db = new PDO('sqlite:'.$sqlite_trac_path);
+// Connect to Trac database using PDO
+switch ($pdo_driver) {
+    case 'mysql':
+	    $trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
+        break;
+
+    case 'sqlite':
+        // Check the the file exists
+        if (!file_exists($sqlite_trac_path)) {
+            echo "SQLITE file does not exist.\n";
+            exit;
+        }
+
+	    $trac_db = new PDO('sqlite:'.$sqlite_trac_path);
+        break;
+
+    case 'pgsql':
+        $trac_db = new PDO("pgsql:host=$pgsql_host;dbname=$pgsql_dbname;user=$pgsql_user;password=$pgsql_password");
+        break;
+
+    default:
+        echo "Unknown PDO driver.\n";
+        exit;
 }
-else {
-	$trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
-}
+
+// Set PDO to throw exceptions on error.
+$trac_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 echo "Connected to Trac\n";
 
@@ -80,7 +112,7 @@ if (file_exists($save_milestones)) {
 
 if (!$skip_milestones) {
 	// Export all milestones
-	$res = $trac_db->query("SELECT * FROM `milestone` ORDER BY `due`");
+	$res = $trac_db->query("SELECT * FROM milestone ORDER BY due");
 	$mnum = 1;
 	foreach ($res->fetchAll() as $row) {
 		//$milestones[$row['name']] = ++$mnum;
@@ -115,21 +147,21 @@ if (file_exists($save_labels)) {
 
 if (!$skip_labels) {
     // Export all "labels"
-	$res = $trac_db->query("SELECT DISTINCT 'T' label_type, type       name, 'cccccc' color
-	                        FROM ticket WHERE IFNULL(type, '')       <> ''
+	$res = $trac_db->query("SELECT DISTINCT 'T' AS label_type, type AS name, 'cccccc' AS color
+	                        FROM ticket WHERE COALESCE(type, '') <> ''
 							UNION
-							SELECT DISTINCT 'C' label_type, component  name, '0000aa' color
-	                        FROM ticket WHERE IFNULL(component, '')  <> ''
+							SELECT DISTINCT 'C' AS label_type, component AS name, '0000aa' AS color
+	                        FROM ticket WHERE COALESCE (component, '')  <> ''
 							UNION
-							SELECT DISTINCT 'P' label_type, priority   name, case when lower(priority) = 'urgent' then 'ff0000'
+							SELECT DISTINCT 'P' AS label_type, priority AS name, case when lower(priority) = 'urgent' then 'ff0000'
 							                                                      when lower(priority) = 'high'   then 'ff6666'
 																				  when lower(priority) = 'medium' then 'ffaaaa'
 																				  when lower(priority) = 'low'    then 'ffdddd'
 																				  else                                 'aa8888' end color
-	                        FROM ticket WHERE IFNULL(priority, '')   <> ''
+	                        FROM ticket WHERE COALESCE(priority, '')   <> ''
 							UNION
-							SELECT DISTINCT 'R' label_type, resolution name, '55ff55' color
-	                        FROM ticket WHERE IFNULL(resolution, '') <> ''");
+							SELECT DISTINCT 'R' AS label_type, resolution AS name, '55ff55' AS color
+	                        FROM ticket WHERE COALESCE(resolution, '') <> ''");
 
 	foreach ($res->fetchAll() as $row) {
 		$resp = github_add_label(array(
@@ -160,7 +192,7 @@ if (file_exists($save_tickets)) {
 if (!$skip_tickets) {
 	// Export tickets
 	$limit = $ticket_limit > 0 ? "LIMIT $ticket_offset, $ticket_limit" : '';
-	$res = $trac_db->query("SELECT * FROM `ticket` ORDER BY `id` $limit");
+	$res = $trac_db->query("SELECT * FROM ticket ORDER BY id $limit");
 	foreach ($res->fetchAll() as $row) {
 		if (empty($row['milestone'])) {
 			continue;
@@ -222,7 +254,7 @@ if (!$skip_tickets) {
 if (!$skip_comments) {
 	// Export all comments
 	$limit = $comments_limit > 0 ? "LIMIT $comments_offset, $comments_limit" : '';
-	$res = $trac_db->query("SELECT * FROM `ticket_change` where `field` = 'comment' AND `newvalue` != '' ORDER BY `ticket`, `time` $limit");
+	$res = $trac_db->query("SELECT * FROM ticket_change where field = 'comment' AND newvalue != '' ORDER BY ticket, time $limit");
 	foreach ($res->fetchAll() as $row) {
 		$text = strtolower($row['author']) == strtolower($username) ? $row['newvalue'] : '**Author: ' . $row['author'] . "**\n" . $row['newvalue'];
 		$resp = github_add_comment($tickets[$row['ticket']], translate_markup($text));
