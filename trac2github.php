@@ -292,9 +292,9 @@ function github_post($url, $json, $patch = false) {
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
 	}
 	$ret = curl_exec($ch);
-	if(!$ret) { 
-		trigger_error(curl_error($ch)); 
-	} 
+	if(!$ret) {
+		trigger_error(curl_error($ch));
+	}
 	curl_close($ch);
 	return $ret;
 }
