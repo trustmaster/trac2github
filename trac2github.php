@@ -57,6 +57,10 @@ $skip_comments   = true;
 $comments_offset = 0; // Start at this offset if limit > 0
 $comments_limit  = 0; // Max comments per run if > 0
 
+// Whether to add a "Migrated-From:" suffix to each issue's body
+$add_migrated_suffix = false;
+$trac_url = 'http://my.domain/trac/env';
+
 // Paths to milestone/ticket cache if you run it multiple times with skip/offset
 $save_milestones = '/tmp/trac_milestones.list';
 $save_tickets = '/tmp/trac_tickets.list';
@@ -214,10 +218,12 @@ if (!$skip_tickets) {
 		    $ticketLabels[] = $labels['R'][crc32($row['resolution'])];
 		}
 
+		$body = make_body($row['description']);
+
         // There is a strange issue with summaries containing percent signs...
 		$resp = github_add_issue(array(
 			'title' => preg_replace("/%/", '[pct]', $row['summary']),
-			'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
+			'body' => body_with_possible_suffix($body, $row['id']),
 			'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
 			'milestone' => $milestones[crc32($row['milestone'])],
 			'labels' => $ticketLabels
@@ -230,7 +236,7 @@ if (!$skip_tickets) {
 				// Close the issue
 				$resp = github_update_issue($resp['number'], array(
 					'title' => preg_replace("/%/", '[pct]', $row['summary']),
-					'body' => empty($row['description']) ? 'None' : translate_markup($row['description']),
+					'body' => $body,
 					'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
 					'milestone' => $milestones[crc32($row['milestone'])],
 					'labels' => $ticketLabels,
@@ -323,6 +329,10 @@ function github_update_issue($issue, $data) {
 	return json_decode(github_post("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
 }
 
+function make_body($description) {
+	return empty($description) ? 'None' : translate_markup($description);
+}
+
 function translate_markup($data) {
     // Replace code blocks with an associated language
     $data = preg_replace('/\{\{\{(\s*#!(\w+))?/m', '```$2', $data);
@@ -333,6 +343,12 @@ function translate_markup($data) {
 
     // Possibly translate other markup as well?
     return $data;
+}
+
+function body_with_possible_suffix($body, $id) {
+	global $add_migrated_suffix, $trac_url;
+	if (!$add_migrated_suffix) return $body;
+	return "$body\n\nMigrated-From: $trac_url/ticket/$id";
 }
 
 ?>
