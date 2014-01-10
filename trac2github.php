@@ -341,6 +341,9 @@ function translate_markup($data) {
 	// Avoid non-ASCII characters, as that will cause trouble with json_encode()
 	$data = preg_replace('/[^(\x00-\x7F)]*/','', $data);
 
+	// Translate Trac-style links to Markdown
+	$data = preg_replace('/\[([^ ]+) ([^\]]+)\]/', '[$2]($1)', $data);
+
 	// Possibly translate other markup as well?
 	return $data;
 }
