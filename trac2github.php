@@ -17,9 +17,9 @@ $repo       = 'Organization or User name';
 
 // All users must be valid github logins!
 $users_list = array(
-    'TracUsermame' => 'GithubUsername',
-    'Trustmaster' => 'trustmaster',
-    'John.Done' => 'johndoe'
+	'TracUsermame' => 'GithubUsername',
+	'Trustmaster' => 'trustmaster',
+	'John.Done' => 'johndoe'
 );
 
 // The PDO driver name to use.
@@ -81,27 +81,27 @@ set_time_limit(0);
 
 // Connect to Trac database using PDO
 switch ($pdo_driver) {
-    case 'mysql':
-	    $trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
-        break;
+	case 'mysql':
+		$trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
+		break;
 
-    case 'sqlite':
-        // Check the the file exists
-        if (!file_exists($sqlite_trac_path)) {
-            echo "SQLITE file does not exist.\n";
-            exit;
-        }
+	case 'sqlite':
+		// Check the the file exists
+		if (!file_exists($sqlite_trac_path)) {
+			echo "SQLITE file does not exist.\n";
+			exit;
+		}
 
-	    $trac_db = new PDO('sqlite:'.$sqlite_trac_path);
-        break;
+		$trac_db = new PDO('sqlite:'.$sqlite_trac_path);
+		break;
 
-    case 'pgsql':
-        $trac_db = new PDO("pgsql:host=$pgsql_host;dbname=$pgsql_dbname;user=$pgsql_user;password=$pgsql_password");
-        break;
+	case 'pgsql':
+		$trac_db = new PDO("pgsql:host=$pgsql_host;dbname=$pgsql_dbname;user=$pgsql_user;password=$pgsql_password");
+		break;
 
-    default:
-        echo "Unknown PDO driver.\n";
-        exit;
+	default:
+		echo "Unknown PDO driver.\n";
+		exit;
 }
 
 // Set PDO to throw exceptions on error.
@@ -150,21 +150,21 @@ if (file_exists($save_labels)) {
 }
 
 if (!$skip_labels) {
-    // Export all "labels"
+	// Export all "labels"
 	$res = $trac_db->query("SELECT DISTINCT 'T' AS label_type, type AS name, 'cccccc' AS color
 	                        FROM ticket WHERE COALESCE(type, '') <> ''
-							UNION
-							SELECT DISTINCT 'C' AS label_type, component AS name, '0000aa' AS color
+	                        UNION
+	                        SELECT DISTINCT 'C' AS label_type, component AS name, '0000aa' AS color
 	                        FROM ticket WHERE COALESCE (component, '')  <> ''
-							UNION
-							SELECT DISTINCT 'P' AS label_type, priority AS name, case when lower(priority) = 'urgent' then 'ff0000'
-							                                                      when lower(priority) = 'high'   then 'ff6666'
-																				  when lower(priority) = 'medium' then 'ffaaaa'
-																				  when lower(priority) = 'low'    then 'ffdddd'
-																				  else                                 'aa8888' end color
+	                        UNION
+	                        SELECT DISTINCT 'P' AS label_type, priority AS name, case when lower(priority) = 'urgent' then 'ff0000'
+	                                                                                  when lower(priority) = 'high'   then 'ff6666'
+	                                                                                  when lower(priority) = 'medium' then 'ffaaaa'
+	                                                                                  when lower(priority) = 'low'    then 'ffdddd'
+	                                                                                  else                                 'aa8888' end color
 	                        FROM ticket WHERE COALESCE(priority, '')   <> ''
-							UNION
-							SELECT DISTINCT 'R' AS label_type, resolution AS name, '55ff55' AS color
+	                        UNION
+	                        SELECT DISTINCT 'R' AS label_type, resolution AS name, '55ff55' AS color
 	                        FROM ticket WHERE COALESCE(resolution, '') <> ''");
 
 	foreach ($res->fetchAll() as $row) {
@@ -206,21 +206,21 @@ if (!$skip_tickets) {
 		}
 		$ticketLabels = array();
 		if (!empty($labels['T'][crc32($row['type'])])) {
-		    $ticketLabels[] = $labels['T'][crc32($row['type'])];
+			$ticketLabels[] = $labels['T'][crc32($row['type'])];
 		}
 		if (!empty($labels['C'][crc32($row['component'])])) {
-		    $ticketLabels[] = $labels['C'][crc32($row['component'])];
+			$ticketLabels[] = $labels['C'][crc32($row['component'])];
 		}
 		if (!empty($labels['P'][crc32($row['priority'])])) {
-		    $ticketLabels[] = $labels['P'][crc32($row['priority'])];
+			$ticketLabels[] = $labels['P'][crc32($row['priority'])];
 		}
 		if (!empty($labels['R'][crc32($row['resolution'])])) {
-		    $ticketLabels[] = $labels['R'][crc32($row['resolution'])];
+			$ticketLabels[] = $labels['R'][crc32($row['resolution'])];
 		}
 
 		$body = make_body($row['description']);
 
-        // There is a strange issue with summaries containing percent signs...
+		// There is a strange issue with summaries containing percent signs...
 		$resp = github_add_issue(array(
 			'title' => preg_replace("/%/", '[pct]', $row['summary']),
 			'body' => body_with_possible_suffix($body, $row['id']),
@@ -292,9 +292,9 @@ function github_post($url, $json, $patch = false) {
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
 	}
 	$ret = curl_exec($ch);
-	if(!$ret) { 
-        trigger_error(curl_error($ch)); 
-    } 
+	if (!$ret) {
+		trigger_error(curl_error($ch));
+	}
 	curl_close($ch);
 	return $ret;
 }
@@ -334,15 +334,15 @@ function make_body($description) {
 }
 
 function translate_markup($data) {
-    // Replace code blocks with an associated language
-    $data = preg_replace('/\{\{\{(\s*#!(\w+))?/m', '```$2', $data);
-    $data = preg_replace('/\}\}\}/', '```', $data);
+	// Replace code blocks with an associated language
+	$data = preg_replace('/\{\{\{(\s*#!(\w+))?/m', '```$2', $data);
+	$data = preg_replace('/\}\}\}/', '```', $data);
 
-    // Avoid non-ASCII characters, as that will cause trouble with json_encode()
+	// Avoid non-ASCII characters, as that will cause trouble with json_encode()
 	$data = preg_replace('/[^(\x00-\x7F)]*/','', $data);
 
-    // Possibly translate other markup as well?
-    return $data;
+	// Possibly translate other markup as well?
+	return $data;
 }
 
 function body_with_possible_suffix($body, $id) {
