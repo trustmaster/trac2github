@@ -75,9 +75,14 @@ $verbose = false;
 
 // DO NOT EDIT BELOW
 
+if (file_exists('trac2github.cfg')) {
+  include 'trac2github.cfg';
+}
+
 error_reporting(E_ALL ^ E_NOTICE);
 ini_set('display_errors', 1);
 set_time_limit(0);
+date_default_timezone_set("UTC");
 
 // Connect to Trac database using PDO
 switch ($pdo_driver) {
@@ -203,9 +208,6 @@ if (!$skip_tickets) {
 	$limit = $ticket_limit > 0 ? "LIMIT $ticket_offset, $ticket_limit" : '';
 	$res = $trac_db->query("SELECT * FROM ticket ORDER BY id $limit");
 	foreach ($res->fetchAll() as $row) {
-		if (empty($row['milestone'])) {
-			continue;
-		}
 		if (empty($row['owner']) || !isset($users_list[$row['owner']])) {
 			$row['owner'] = $username;
 		}
@@ -224,13 +226,20 @@ if (!$skip_tickets) {
 		}
 
 		$body = make_body($row['description']);
+		$timestamp = date("j M Y H:i e", $row['time']);
+		$body = '**Reported by ' . $row['reporter'] . ' on ' . $timestamp . "**\n" . $body;
 
 		// There is a strange issue with summaries containing percent signs...
+		if (empty($row['milestone'])) {
+			$milestone = NULL;
+		} else {
+			$milestone = $milestones[crc32($row['milestone'])];
+		}
 		$resp = github_add_issue(array(
 			'title' => preg_replace("/%/", '[pct]', $row['summary']),
 			'body' => body_with_possible_suffix($body, $row['id']),
 			'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
-			'milestone' => $milestones[crc32($row['milestone'])],
+			'milestone' => $milestone,
 			'labels' => $ticketLabels
 		));
 		if (isset($resp['number'])) {
@@ -243,7 +252,7 @@ if (!$skip_tickets) {
 					'title' => preg_replace("/%/", '[pct]', $row['summary']),
 					'body' => $body,
 					'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
-					'milestone' => $milestones[crc32($row['milestone'])],
+					'milestone' => $milestone,
 					'labels' => $ticketLabels,
 					'state' => 'closed'
 				));
@@ -267,7 +276,8 @@ if (!$skip_comments) {
 	$limit = $comments_limit > 0 ? "LIMIT $comments_offset, $comments_limit" : '';
 	$res = $trac_db->query("SELECT * FROM ticket_change where field = 'comment' AND newvalue != '' ORDER BY ticket, time $limit");
 	foreach ($res->fetchAll() as $row) {
-		$text = strtolower($row['author']) == strtolower($username) ? $row['newvalue'] : '**Author: ' . $row['author'] . "**\n" . $row['newvalue'];
+		$timestamp = date("j M Y H:i e", $row['time']);
+		$text = '**Commented by ' . $row['author'] . ' on ' . $timestamp . "**\n" . $row['newvalue'];
 		$resp = github_add_comment($tickets[$row['ticket']], translate_markup($text));
 		if (isset($resp['url'])) {
 			// OK
