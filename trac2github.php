@@ -227,7 +227,7 @@ if (!$skip_tickets) {
 
 		$body = make_body($row['description']);
 		$timestamp = date("j M Y H:i e", $row['time']);
-		$body = '**Reported by ' . $row['reporter'] . ' on ' . $timestamp . "**\n" . $body;
+		$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
 		// There is a strange issue with summaries containing percent signs...
 		if (empty($row['milestone'])) {
@@ -368,5 +368,13 @@ function body_with_possible_suffix($body, $id) {
 	if (!$add_migrated_suffix) return $body;
 	return "$body\n\nMigrated-From: $trac_url/ticket/$id";
 }
+
+function obfuscate_email($text)
+{
+    list($text) = explode('@', $text);
+    $text = preg_replace('/[^a-z0-9]/i', ' ', $text);
+    return $text;
+}
+
 
 ?>
