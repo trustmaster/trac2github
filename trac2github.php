@@ -36,9 +36,10 @@ $mysqldb_trac       = 'Trac MySQL database name';
 $sqlite_trac_path = '/path/to/trac.db';
 
 // Postgresql connection info
-$pgsql_host     = 'localhost';
-$pgsql_dbname   = 'Postgres database name';
-$pgsql_user     = 'Postgres user name';
+$pgsql_host = 'localhost';
+$pgsql_port  = '5432';
+$pgsql_dbname = 'Postgres database name';
+$pgsql_user = 'Postgres user name';
 $pgsql_password = 'Postgres password';
 
 // Do not convert milestones at this run
@@ -101,7 +102,7 @@ switch ($pdo_driver) {
 		break;
 
 	case 'pgsql':
-		$trac_db = new PDO("pgsql:host=$pgsql_host;dbname=$pgsql_dbname;user=$pgsql_user;password=$pgsql_password");
+		$trac_db = new PDO("pgsql:host=$pgsql_host;port=$pgsql_port;dbname=$pgsql_dbname;user=$pgsql_user;password=$pgsql_password");
 		break;
 
 	default:
@@ -227,7 +228,7 @@ if (!$skip_tickets) {
 
 		$body = make_body($row['description']);
 		$timestamp = date("j M Y H:i e", $row['time']);
-		$body = '**Reported by ' . $row['reporter'] . ' on ' . $timestamp . "**\n" . $body;
+		$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
 		// There is a strange issue with summaries containing percent signs...
 		if (empty($row['milestone'])) {
@@ -368,5 +369,13 @@ function body_with_possible_suffix($body, $id) {
 	if (!$add_migrated_suffix) return $body;
 	return "$body\n\nMigrated-From: $trac_url/ticket/$id";
 }
+
+function obfuscate_email($text)
+{
+    list($text) = explode('@', $text);
+    $text = preg_replace('/[^a-z0-9]/i', ' ', $text);
+    return $text;
+}
+
 
 ?>
