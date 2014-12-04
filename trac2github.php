@@ -113,6 +113,9 @@ switch ($pdo_driver) {
 // Set PDO to throw exceptions on error.
 $trac_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
+// Boolean used to divide times by 1000000 when using Postgres where times are stored in microsecs (bigint)
+$postgres=($pdo_driver == 'pgsql');
+
 echo "Connected to Trac\n";
 
 $milestones = array();
@@ -126,11 +129,13 @@ if (!$skip_milestones) {
 	$mnum = 1;
 	foreach ($res->fetchAll() as $row) {
 		//$milestones[$row['name']] = ++$mnum;
+		$epochInSecs = (int) ($row['due']/($postgres? 1000000:1));
+		echo "due : ".date('Y-m-d\TH:i:s\Z', $epochInSecs)."\n";
 		$resp = github_add_milestone(array(
 			'title' => $row['name'],
 			'state' => $row['completed'] == 0 ? 'open' : 'closed',
 			'description' => empty($row['description']) ? 'None' : $row['description'],
-			'due_on' => date('Y-m-d\TH:i:s\Z', (int) $row['due'])
+			'due_on' => date('Y-m-d\TH:i:s\Z', $epochInSecs)
 		));
 		if (isset($resp['number'])) {
 			// OK
@@ -227,7 +232,7 @@ if (!$skip_tickets) {
 		}
 
 		$body = make_body($row['description']);
-		$timestamp = date("j M Y H:i e", $row['time']);
+		$timestamp = date("j M Y H:i e", $row['time']/($postgres? 1000000:1));
 		$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
 		// There is a strange issue with summaries containing percent signs...
@@ -277,7 +282,7 @@ if (!$skip_comments) {
 	$limit = $comments_limit > 0 ? "LIMIT $comments_offset, $comments_limit" : '';
 	$res = $trac_db->query("SELECT * FROM ticket_change where field = 'comment' AND newvalue != '' ORDER BY ticket, time $limit");
 	foreach ($res->fetchAll() as $row) {
-		$timestamp = date("j M Y H:i e", $row['time']);
+		$timestamp = date("j M Y H:i e", $row['time']/($postgres? 1000000:1));
 		$text = '**Commented by ' . $row['author'] . ' on ' . $timestamp . "**\n" . $row['newvalue'];
 		$resp = github_add_comment($tickets[$row['ticket']], translate_markup($text));
 		if (isset($resp['url'])) {
