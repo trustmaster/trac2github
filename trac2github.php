@@ -36,9 +36,10 @@ $mysqldb_trac       = 'Trac MySQL database name';
 $sqlite_trac_path = '/path/to/trac.db';
 
 // Postgresql connection info
-$pgsql_host     = 'localhost';
-$pgsql_dbname   = 'Postgres database name';
-$pgsql_user     = 'Postgres user name';
+$pgsql_host = 'localhost';
+$pgsql_port  = '5432';
+$pgsql_dbname = 'Postgres database name';
+$pgsql_user = 'Postgres user name';
 $pgsql_password = 'Postgres password';
 
 // Do not convert milestones at this run
@@ -101,7 +102,7 @@ switch ($pdo_driver) {
 		break;
 
 	case 'pgsql':
-		$trac_db = new PDO("pgsql:host=$pgsql_host;dbname=$pgsql_dbname;user=$pgsql_user;password=$pgsql_password");
+		$trac_db = new PDO("pgsql:host=$pgsql_host;port=$pgsql_port;dbname=$pgsql_dbname;user=$pgsql_user;password=$pgsql_password");
 		break;
 
 	default:
