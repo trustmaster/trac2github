@@ -22,6 +22,9 @@ $users_list = array(
 	'John.Done' => 'johndoe'
 );
 
+//Restrict to certain components (null or Array with components name).
+$use_components = null;
+
 // The PDO driver name to use.
 // Options are: 'mysql', 'sqlite', 'pgsql'
 $pdo_driver = 'mysql';
@@ -118,6 +121,10 @@ $postgres=($pdo_driver == 'pgsql');
 
 echo "Connected to Trac\n";
 
+//if restriction to certain components is added, put this in the SQL string
+if ($use_components && is_array($use_components)) $my_components = " AND component IN ('".implode("', '", $use_components)."') ";
+else $my_components = "";
+	
 $milestones = array();
 if (file_exists($save_milestones)) {
 	$milestones = unserialize(file_get_contents($save_milestones));
@@ -212,7 +219,8 @@ if (file_exists($save_tickets)) {
 if (!$skip_tickets) {
 	// Export tickets
 	$limit = $ticket_limit > 0 ? "LIMIT $ticket_offset, $ticket_limit" : '';
-	$res = $trac_db->query("SELECT * FROM ticket ORDER BY id $limit");
+		
+	$res = $trac_db->query("SELECT * FROM ticket WHERE 1=1 $my_components ORDER BY id $limit");
 	foreach ($res->fetchAll() as $row) {
 		if (empty($row['owner']) || !isset($users_list[$row['owner']])) {
 			$row['owner'] = $username;
@@ -280,7 +288,7 @@ if (!$skip_tickets) {
 if (!$skip_comments) {
 	// Export all comments
 	$limit = $comments_limit > 0 ? "LIMIT $comments_offset, $comments_limit" : '';
-	$res = $trac_db->query("SELECT * FROM ticket_change where field = 'comment' AND newvalue != '' ORDER BY ticket, time $limit");
+	$res = $trac_db->query("SELECT ticket_change.* FROM ticket_change, ticket WHERE ticket.id = ticket_change.ticket $my_components AND field = 'comment' AND newvalue != '' ORDER BY ticket, time $limit");
 	foreach ($res->fetchAll() as $row) {
 		$timestamp = date("j M Y H:i e", $row['time']/($postgres? 1000000:1));
 		$text = '**Commented by ' . $row['author'] . ' on ' . $timestamp . "**\n" . $row['newvalue'];
