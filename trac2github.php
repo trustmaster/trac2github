@@ -22,8 +22,14 @@ $users_list = array(
 	'John.Done' => 'johndoe'
 );
 
+//User agent
+$curl_ua = "trac2github for $project, by admin@example.com";
+
 //Restrict to certain components (null or Array with components name).
 $use_components = null;
+
+//Delay between API call
+$sleep_microseconds = 4000000;
 
 // The PDO driver name to use.
 // Options are: 'mysql', 'sqlite', 'pgsql'
@@ -316,15 +322,18 @@ function github_post($url, $json, $patch = false) {
 	curl_setopt($ch, CURLOPT_HEADER, false);
 	curl_setopt($ch, CURLOPT_POST, true);
 	curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
-	curl_setopt($ch, CURLOPT_USERAGENT, "trac2github for $project, admin@example.com");
+	curl_setopt($ch, CURLOPT_USERAGENT, $curl_ua);
 	if ($patch) {
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
 	}
+	global $verbose;
 	$ret = curl_exec($ch);
+	if ($verbose) print_r("https://api.github.com$url\n");
 	if (!$ret) {
 		trigger_error(curl_error($ch));
 	}
 	curl_close($ch);
+	usleep($sleep_microseconds);
 	return $ret;
 }
 
