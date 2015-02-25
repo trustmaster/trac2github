@@ -225,9 +225,33 @@ if (file_exists($save_tickets)) {
 if (!$skip_tickets) {
 	// Export tickets
 	$limit = $ticket_limit > 0 ? "LIMIT $ticket_offset, $ticket_limit" : '';
-		
+	$curticket = 1;
 	$res = $trac_db->query("SELECT * FROM ticket WHERE 1=1 $my_components ORDER BY id $limit");
 	foreach ($res->fetchAll() as $row) {
+	  while ($curticket < $row['id']) {
+        $resp = github_add_issue(array(
+			    'title' => "Lost ticket number ".$curticket,
+			    'body' => body_with_possible_suffix("We lost track of this ticket.", $curticket),
+			    'assignee' => $username,
+			    'milestone' => NULL,
+			    'labels' => array()
+		    ));
+        $resp = github_update_issue($curticket, array(
+			    'title' => "Lost ticket number ".$curticket,
+			    'body' => "We lost track of this ticket.",
+			    'assignee' => $username,
+			    'milestone' => NULL,
+			    'labels' => array(),
+			    'state' => 'closed'
+		    ));
+		    $curticket += 1;
+		    echo "Lost ticket $curticket created and closed\n";
+	  }
+	  if ($curticket > $row['id']) {
+	      echo "FATAL : Lost in tickets number";
+	      exit();
+    }
+	      
 		if (empty($row['owner']) || !isset($users_list[$row['owner']])) {
 			$row['owner'] = $username;
 		}
@@ -265,6 +289,7 @@ if (!$skip_tickets) {
 		if (isset($resp['number'])) {
 			// OK
 			$tickets[$row['id']] = (int) $resp['number'];
+			$curticket = (int) $resp['number'] + 1;
 			echo "Ticket #{$row['id']} converted to issue #{$resp['number']}\n";
 			if ($row['status'] == 'closed') {
 				// Close the issue
@@ -298,7 +323,10 @@ if (!$skip_comments) {
 	foreach ($res->fetchAll() as $row) {
 		$timestamp = date("j M Y H:i e", $row['time']/($postgres? 1000000:1));
 		$text = '**Commented by ' . $row['author'] . ' on ' . $timestamp . "**\n" . $row['newvalue'];
-		$resp = github_add_comment($tickets[$row['ticket']], translate_markup($text));
+    // $resp = github_add_comment($tickets[$row['ticket']], translate_markup($text));
+    // Intent was to keep the link between comments and tickets but it doesn't work when you do two passes (first tickets, then comments).
+    //Furthermore, if you wish to keep in sync svn commit log with your ticket number, you need to keep the tickets id exactly the same.
+		$resp = github_add_comment($row['ticket'], translate_markup($text));
 		if (isset($resp['url'])) {
 			// OK
 			echo "Added comment {$resp['url']}\n";
@@ -313,7 +341,7 @@ if (!$skip_comments) {
 echo "Done whatever possible, sorry if not.\n";
 
 function github_post($url, $json, $patch = false) {
-	global $username, $password;
+	global $username, $password, $curl_ua, $verbose, $sleep_microseconds;
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_USERPWD, "$username:$password");
 	curl_setopt($ch, CURLOPT_URL, "https://api.github.com$url");
@@ -326,7 +354,6 @@ function github_post($url, $json, $patch = false) {
 	if ($patch) {
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
 	}
-	global $verbose;
 	$ret = curl_exec($ch);
 	if ($verbose) print_r("https://api.github.com$url\n");
 	if (!$ret) {
