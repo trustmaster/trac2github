@@ -126,15 +126,20 @@ if ($use_components && is_array($use_components)) $my_components = " AND compone
 else $my_components = "";
 	
 $milestones = array();
-if (file_exists($save_milestones)) {
-	$milestones = unserialize(file_get_contents($save_milestones));
-}
 
 if (!$skip_milestones) {
 	// Export all milestones
 	$res = $trac_db->query("SELECT * FROM milestone ORDER BY due");
 	$mnum = 1;
+	$existing_milestones = array();
+	foreach (github_get_milestones() as $m) {
+		$milestones[crc32(urldecode($m['title']))] = (int)$m['number'];
+	}
 	foreach ($res->fetchAll() as $row) {
+		if (isset($milestones[crc32($row['name'])])) {
+			echo "Milestone {$row['name']} already exists\n";
+			continue;
+		}
 		//$milestones[$row['name']] = ++$mnum;
 		$epochInSecs = (int) ($row['due']/($postgres? 1000000:1));
 		echo "due : ".date('Y-m-d\TH:i:s\Z', $epochInSecs)."\n";
@@ -154,8 +159,6 @@ if (!$skip_milestones) {
 			echo "Failed to convert milestone {$row['name']}: $error\n";
 		}
 	}
-	// Serialize to restore in future
-	file_put_contents($save_milestones, serialize($milestones));
 }
 
 $labels = array();
@@ -163,9 +166,6 @@ $labels['T'] = array();
 $labels['C'] = array();
 $labels['P'] = array();
 $labels['R'] = array();
-if (file_exists($save_labels)) {
-	$labels = unserialize(file_get_contents($save_labels));
-}
 
 if (!$skip_labels) {
 	// Export all "labels"
@@ -190,9 +190,19 @@ if (!$skip_labels) {
 	                        SELECT DISTINCT 'R' AS label_type, resolution AS name, '55ff55' AS color
 	                        FROM ticket WHERE COALESCE(resolution, '') <> ''");
 
+	$existing_labels = array();
+	foreach (github_get_labels() as $l) {
+		$existing_labels[] = urldecode($l['name']);
+	}
 	foreach ($res->fetchAll() as $row) {
+		$label_name = $row['label_type'] . ': ' . $row['name'];
+		if (in_array($label_name, $existing_labels)) {
+			echo "Label {$row['name']} already exists\n";
+			$labels[$row['label_type']][crc32($row['name'])] = $label_name;
+			continue;
+		}
 		$resp = github_add_label(array(
-			'name' => $row['label_type'] . ': ' . $row['name'],
+			'name' => $label_name,
 			'color' => $row['color']
 		));
 
@@ -206,8 +216,6 @@ if (!$skip_labels) {
 			echo "Failed to convert label {$row['name']}: $error\n";
 		}
 	}
-	// Serialize to restore in future
-	file_put_contents($save_labels, serialize($labels));
 }
 
 // Try get previously fetched tickets
