@@ -293,7 +293,6 @@ if (!$skip_tickets) {
 		$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
 		$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
-		// There is a strange issue with summaries containing percent signs...
 		if (empty($row['milestone'])) {
 			$milestone = NULL;
 		} else {
@@ -305,7 +304,7 @@ if (!$skip_tickets) {
 			$assignee = NULL;
 		}
 		$resp = github_add_issue(array(
-			'title' => preg_replace("/%/", '[pct]', $row['summary']),
+			'title' => $row['summary'],
 			'body' => body_with_possible_suffix($body, $row['id']),
 			'assignee' => $assignee,
 			'milestone' => $milestone,
