@@ -119,7 +119,7 @@ switch ($pdo_driver) {
 $trac_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 // Boolean used to divide times by 1000000 when using Postgres where times are stored in microsecs (bigint)
-$postgres=($pdo_driver == 'pgsql');
+$time_in_us=($pdo_driver == 'pgsql' || $pdo_driver == 'sqlite');
 
 echo "Connected to Trac\n";
 
@@ -143,7 +143,7 @@ if (!$skip_milestones) {
 			continue;
 		}
 		//$milestones[$row['name']] = ++$mnum;
-		$epochInSecs = (int) ($row['due']/($postgres? 1000000:1));
+		$epochInSecs = (int) ($row['due']/($time_in_us? 1000000:1));
 		echo "due : ".date('Y-m-d\TH:i:s\Z', $epochInSecs)."\n";
 		$resp = github_add_milestone(array(
 			'title' => $row['name'],
@@ -257,7 +257,7 @@ if (!$skip_tickets) {
 		}
 
 		$body = make_body($row['description']);
-		$timestamp = date("j M Y H:i e", $row['time']/($postgres? 1000000:1));
+		$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
 		$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
 		// There is a strange issue with summaries containing percent signs...
