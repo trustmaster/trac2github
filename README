@@ -2,10 +2,18 @@ Features:
 - Converts milestones/tickets/comments/labels
 - Converts Trac usernames to Github usernames
 - Sets assignees if possible, sets you an assignee otherwise
-- Supports manual splitting of conversion process into stages
-- Slows down to match the 60 requests per second API limit rate
+- Supports manual splitting of conversion process into stages, although it is easier to do in one pass
+- Try to match ticket numbers
+- Slows down to match the 60 requests per second API limit rate (with a pause between each call).
+  - Please note that it may not be enough, as rules are moving.
+  - Be nice with github and try to have no watchers on your repo when inserting issues & comment.
+
+Missing Feature :
+- Catching the anti-abuse rate limit error would help to be even nicer with githup
+- svn revision are NOT converted to github equivalent
+- this is pure ascii ...
 
 Usage:
-1. Edit the configuration variables in the file above the DO NOT EDIT BELOW comment or use the external configuration file, trac2github.cfg.
+1. Edit the configuration variables in the file above the DO NOT EDIT BELOW comment or use the external configuration file, trac2github.cfg (that you can copy from trac2github.cfg.dist)
 2. Run it from shell, e.g.:
 $ php trac2github.php
