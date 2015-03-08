@@ -51,6 +51,8 @@ $skip_milestones = false;
 // Do not convert labels at this run
 $skip_labels = false;
 
+$remap_labels = array();
+
 // Do not convert tickets
 $skip_tickets   = false;
 $ticket_offset  = 0; // Start at this offset if limit > 0
@@ -196,6 +198,13 @@ if (!$skip_labels) {
 	}
 	foreach ($res->fetchAll() as $row) {
 		$label_name = $row['label_type'] . ': ' . $row['name'];
+		if (array_key_exists($label_name, $remap_labels)) {
+			$label_name = $remap_labels[$label_name];
+		}
+		if (empty($label_name)) {
+			$labels[$row['label_type']][crc32($row['name'])] = NULL;
+			continue;
+		}
 		if (in_array($label_name, $existing_labels)) {
 			echo "Label {$row['name']} already exists\n";
 			$labels[$row['label_type']][crc32($row['name'])] = $label_name;
