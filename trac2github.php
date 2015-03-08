@@ -57,6 +57,7 @@ $remap_labels = array();
 $skip_tickets   = false;
 $ticket_offset  = 0; // Start at this offset if limit > 0
 $ticket_limit   = 0; // Max tickets per run if > 0
+$ticket_try_preserve_numbers = 0; // Try to preserve ticket numbers - create placeholders, error if not match
 
 // Do not convert comments
 $skip_comments   = true;
@@ -239,6 +240,32 @@ if (!$skip_tickets) {
 		
 	$res = $trac_db->query("SELECT * FROM ticket WHERE 1=1 $my_components ORDER BY id $limit");
 	foreach ($res->fetchAll() as $row) {
+		if (isset($last_ticket_number) and $ticket_try_preserve_numbers) {
+			if ($last_ticket_number >= $row['id']) {
+				echo "ERROR: Cannot create ticket #{$row['id']} because issue #{$last_ticket_number} was already created.";
+				break;
+			}
+			while ($last_ticket_number < $row['id']-1) {
+				$resp = github_add_issue(array(
+							'title' => "Placeholder",
+							'body' => "This is a placeholder created during migration to preserve original issue numbers.",
+							'milestone' => NULL,
+							'labels' => array()
+						      ));
+				if (isset($resp['number'])) {
+					// OK
+					$last_ticket_number = $resp['number'];
+					echo "Created placeholder issue #{$resp['number']}\n";
+					$resp = github_update_issue($resp['number'], array(
+								'state' => 'closed',
+								'labels' => array('invalid'),
+								));
+					if (isset($resp['number'])) {
+						echo "Closed issue #{$resp['number']}\n";
+					}
+				}
+			}
+		}
 		if (empty($row['owner']) || !isset($users_list[$row['owner']])) {
 			$row['owner'] = $username;
 		}
@@ -276,7 +303,12 @@ if (!$skip_tickets) {
 		if (isset($resp['number'])) {
 			// OK
 			$tickets[$row['id']] = (int) $resp['number'];
+			$last_ticket_number = $resp['number'];
 			echo "Ticket #{$row['id']} converted to issue #{$resp['number']}\n";
+			if ($ticket_try_preserve_numbers and $row['id'] != $resp['number']) {
+				echo "ERROR: New ticket number do not match the original one!\n";
+				break;
+			}
 			if ($row['status'] == 'closed') {
 				// Close the issue
 				$resp = github_update_issue($resp['number'], array(
@@ -296,6 +328,7 @@ if (!$skip_tickets) {
 			// Error
 			$error = print_r($resp, 1);
 			echo "Failed to convert a ticket #{$row['id']}: $error\n";
+			break;
 		}
 	}
 	// Serialize to restore in future
