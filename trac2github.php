@@ -306,7 +306,7 @@ if (!$skip_comments) {
 
 echo "Done whatever possible, sorry if not.\n";
 
-function github_post($url, $json, $patch = false) {
+function github_req($url, $json, $patch = false, $post = true) {
 	global $username, $password;
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_USERPWD, "$username:$password");
@@ -314,11 +314,15 @@ function github_post($url, $json, $patch = false) {
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 	curl_setopt($ch, CURLOPT_HEADER, false);
-	curl_setopt($ch, CURLOPT_POST, true);
+	curl_setopt($ch, CURLOPT_POST, $post);
 	curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
 	curl_setopt($ch, CURLOPT_USERAGENT, "trac2github for $project, admin@example.com");
 	if ($patch) {
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+	} else if ($post) {
+		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+	} else {
+		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
 	}
 	$ret = curl_exec($ch);
 	if (!$ret) {
@@ -331,31 +335,43 @@ function github_post($url, $json, $patch = false) {
 function github_add_milestone($data) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($data);
-	return json_decode(github_post("/repos/$project/$repo/milestones", json_encode($data)), true);
+	return json_decode(github_req("/repos/$project/$repo/milestones", json_encode($data)), true);
 }
 
 function github_add_label($data) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($data);
-	return json_decode(github_post("/repos/$project/$repo/labels", json_encode($data)), true);
+	return json_decode(github_req("/repos/$project/$repo/labels", json_encode($data)), true);
 }
 
 function github_add_issue($data) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($data);
-	return json_decode(github_post("/repos/$project/$repo/issues", json_encode($data)), true);
+	return json_decode(github_req("/repos/$project/$repo/issues", json_encode($data)), true);
 }
 
 function github_add_comment($issue, $body) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($body);
-	return json_decode(github_post("/repos/$project/$repo/issues/$issue/comments", json_encode(array('body' => $body))), true);
+	return json_decode(github_req("/repos/$project/$repo/issues/$issue/comments", json_encode(array('body' => $body))), true);
 }
 
 function github_update_issue($issue, $data) {
 	global $project, $repo, $verbose;
+	if ($verbose) print_r($data);
+	return json_decode(github_req("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
+}
+
+function github_get_milestones() {
+	global $project, $repo, $verbose;
 	if ($verbose) print_r($body);
-	return json_decode(github_post("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
+	return json_decode(github_req("/repos/$project/$repo/milestones?per_page=100&state=all", false, false, false), true);
+}
+
+function github_get_labels() {
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($body);
+	return json_decode(github_req("/repos/$project/$repo/labels?per_page=100", false, false, false), true);
 }
 
 function make_body($description) {
