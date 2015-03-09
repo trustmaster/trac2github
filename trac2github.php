@@ -51,13 +51,16 @@ $skip_milestones = false;
 // Do not convert labels at this run
 $skip_labels = false;
 
+$remap_labels = array();
+
 // Do not convert tickets
 $skip_tickets   = false;
 $ticket_offset  = 0; // Start at this offset if limit > 0
 $ticket_limit   = 0; // Max tickets per run if > 0
+$ticket_try_preserve_numbers = 0; // Try to preserve ticket numbers - create placeholders, error if not match
 
 // Do not convert comments
-$skip_comments   = true;
+$skip_comments   = false;
 $comments_offset = 0; // Start at this offset if limit > 0
 $comments_limit  = 0; // Max comments per run if > 0
 
@@ -117,7 +120,7 @@ switch ($pdo_driver) {
 $trac_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 // Boolean used to divide times by 1000000 when using Postgres where times are stored in microsecs (bigint)
-$postgres=($pdo_driver == 'pgsql');
+$time_in_us=($pdo_driver == 'pgsql' || $pdo_driver == 'sqlite');
 
 echo "Connected to Trac\n";
 
@@ -126,17 +129,22 @@ if ($use_components && is_array($use_components)) $my_components = " AND compone
 else $my_components = "";
 	
 $milestones = array();
-if (file_exists($save_milestones)) {
-	$milestones = unserialize(file_get_contents($save_milestones));
-}
 
 if (!$skip_milestones) {
 	// Export all milestones
 	$res = $trac_db->query("SELECT * FROM milestone ORDER BY due");
 	$mnum = 1;
+	$existing_milestones = array();
+	foreach (github_get_milestones() as $m) {
+		$milestones[crc32(urldecode($m['title']))] = (int)$m['number'];
+	}
 	foreach ($res->fetchAll() as $row) {
+		if (isset($milestones[crc32($row['name'])])) {
+			echo "Milestone {$row['name']} already exists\n";
+			continue;
+		}
 		//$milestones[$row['name']] = ++$mnum;
-		$epochInSecs = (int) ($row['due']/($postgres? 1000000:1));
+		$epochInSecs = (int) ($row['due']/($time_in_us? 1000000:1));
 		echo "due : ".date('Y-m-d\TH:i:s\Z', $epochInSecs)."\n";
 		$resp = github_add_milestone(array(
 			'title' => $row['name'],
@@ -154,8 +162,6 @@ if (!$skip_milestones) {
 			echo "Failed to convert milestone {$row['name']}: $error\n";
 		}
 	}
-	// Serialize to restore in future
-	file_put_contents($save_milestones, serialize($milestones));
 }
 
 $labels = array();
@@ -163,9 +169,6 @@ $labels['T'] = array();
 $labels['C'] = array();
 $labels['P'] = array();
 $labels['R'] = array();
-if (file_exists($save_labels)) {
-	$labels = unserialize(file_get_contents($save_labels));
-}
 
 if (!$skip_labels) {
 	// Export all "labels"
@@ -190,9 +193,26 @@ if (!$skip_labels) {
 	                        SELECT DISTINCT 'R' AS label_type, resolution AS name, '55ff55' AS color
 	                        FROM ticket WHERE COALESCE(resolution, '') <> ''");
 
+	$existing_labels = array();
+	foreach (github_get_labels() as $l) {
+		$existing_labels[] = urldecode($l['name']);
+	}
 	foreach ($res->fetchAll() as $row) {
+		$label_name = $row['label_type'] . ': ' . $row['name'];
+		if (array_key_exists($label_name, $remap_labels)) {
+			$label_name = $remap_labels[$label_name];
+		}
+		if (empty($label_name)) {
+			$labels[$row['label_type']][crc32($row['name'])] = NULL;
+			continue;
+		}
+		if (in_array($label_name, $existing_labels)) {
+			echo "Label {$row['name']} already exists\n";
+			$labels[$row['label_type']][crc32($row['name'])] = $label_name;
+			continue;
+		}
 		$resp = github_add_label(array(
-			'name' => $row['label_type'] . ': ' . $row['name'],
+			'name' => $label_name,
 			'color' => $row['color']
 		));
 
@@ -206,8 +226,6 @@ if (!$skip_labels) {
 			echo "Failed to convert label {$row['name']}: $error\n";
 		}
 	}
-	// Serialize to restore in future
-	file_put_contents($save_labels, serialize($labels));
 }
 
 // Try get previously fetched tickets
@@ -222,8 +240,40 @@ if (!$skip_tickets) {
 		
 	$res = $trac_db->query("SELECT * FROM ticket WHERE 1=1 $my_components ORDER BY id $limit");
 	foreach ($res->fetchAll() as $row) {
-		if (empty($row['owner']) || !isset($users_list[$row['owner']])) {
-			$row['owner'] = $username;
+		if (isset($last_ticket_number) and $ticket_try_preserve_numbers) {
+			if ($last_ticket_number >= $row['id']) {
+				echo "ERROR: Cannot create ticket #{$row['id']} because issue #{$last_ticket_number} was already created.";
+				break;
+			}
+			while ($last_ticket_number < $row['id']-1) {
+				$resp = github_add_issue(array(
+							'title' => "Placeholder",
+							'body' => "This is a placeholder created during migration to preserve original issue numbers.",
+							'milestone' => NULL,
+							'labels' => array()
+						      ));
+				if (isset($resp['number'])) {
+					// OK
+					$last_ticket_number = $resp['number'];
+					echo "Created placeholder issue #{$resp['number']}\n";
+					$resp = github_update_issue($resp['number'], array(
+								'state' => 'closed',
+								'labels' => array('invalid'),
+								));
+					if (isset($resp['number'])) {
+						echo "Closed issue #{$resp['number']}\n";
+					}
+				}
+			}
+		}
+		if (!$skip_comments) {
+			// restore original values (at ticket creation time), to restore modification history later
+			foreach (['owner', 'priority', 'resolution', 'milestone', 'type', 'component', 'description', 'summary'] as $f) {
+				$row[$f] = trac_orig_value($row, $f);
+			}
+		}
+		if (!empty($row['owner']) and !isset($users_list[$row['owner']])) {
+			$row['owner'] = NULL;
 		}
 		$ticketLabels = array();
 		if (!empty($labels['T'][crc32($row['type'])])) {
@@ -240,38 +290,48 @@ if (!$skip_tickets) {
 		}
 
 		$body = make_body($row['description']);
-		$timestamp = date("j M Y H:i e", $row['time']/($postgres? 1000000:1));
+		$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
 		$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
-		// There is a strange issue with summaries containing percent signs...
 		if (empty($row['milestone'])) {
 			$milestone = NULL;
 		} else {
 			$milestone = $milestones[crc32($row['milestone'])];
 		}
+		if (!empty($row['owner'])) {
+			$assignee = isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'];
+		} else {
+			$assignee = NULL;
+		}
 		$resp = github_add_issue(array(
-			'title' => preg_replace("/%/", '[pct]', $row['summary']),
+			'title' => $row['summary'],
 			'body' => body_with_possible_suffix($body, $row['id']),
-			'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
+			'assignee' => $assignee,
 			'milestone' => $milestone,
 			'labels' => $ticketLabels
 		));
 		if (isset($resp['number'])) {
 			// OK
 			$tickets[$row['id']] = (int) $resp['number'];
+			$last_ticket_number = $resp['number'];
 			echo "Ticket #{$row['id']} converted to issue #{$resp['number']}\n";
-			if ($row['status'] == 'closed') {
-				// Close the issue
-				$resp = github_update_issue($resp['number'], array(
-					'title' => preg_replace("/%/", '[pct]', $row['summary']),
-					'body' => $body,
-					'assignee' => isset($users_list[$row['owner']]) ? $users_list[$row['owner']] : $row['owner'],
-					'milestone' => $milestone,
-					'labels' => $ticketLabels,
-					'state' => 'closed'
-				));
-				if (isset($resp['number'])) {
-					echo "Closed issue #{$resp['number']}\n";
+			if ($ticket_try_preserve_numbers and $row['id'] != $resp['number']) {
+				echo "ERROR: New ticket number do not match the original one!\n";
+				break;
+			}
+			if (!$skip_comments) {
+				if (!add_changes_for_ticket($row['id'], $ticketLabels)) {
+					break;
+				}
+			} else {
+				if ($row['status'] == 'closed') {
+					// Close the issue
+					$resp = github_update_issue($resp['number'], array(
+								'state' => 'closed'
+								));
+					if (isset($resp['number'])) {
+						echo "Closed issue #{$resp['number']}\n";
+					}
 				}
 			}
 
@@ -279,34 +339,109 @@ if (!$skip_tickets) {
 			// Error
 			$error = print_r($resp, 1);
 			echo "Failed to convert a ticket #{$row['id']}: $error\n";
+			break;
 		}
 	}
 	// Serialize to restore in future
 	file_put_contents($save_tickets, serialize($tickets));
 }
 
-if (!$skip_comments) {
-	// Export all comments
-	$limit = $comments_limit > 0 ? "LIMIT $comments_offset, $comments_limit" : '';
-	$res = $trac_db->query("SELECT ticket_change.* FROM ticket_change, ticket WHERE ticket.id = ticket_change.ticket $my_components AND field = 'comment' AND newvalue != '' ORDER BY ticket, time $limit");
+echo "Done whatever possible, sorry if not.\n";
+
+function trac_orig_value($ticket, $field) {
+	global $trac_db;
+	$orig_value = $ticket[$field];
+	$res = $trac_db->query("SELECT ticket_change.* FROM ticket_change WHERE ticket = {$ticket['id']} AND field = '$field' ORDER BY time LIMIT 1");
 	foreach ($res->fetchAll() as $row) {
-		$timestamp = date("j M Y H:i e", $row['time']/($postgres? 1000000:1));
-		$text = '**Commented by ' . $row['author'] . ' on ' . $timestamp . "**\n" . $row['newvalue'];
-		$resp = github_add_comment($tickets[$row['ticket']], translate_markup($text));
+		$orig_value = $row['oldvalue'];
+	}
+	return $orig_value;
+}
+
+function add_changes_for_ticket($ticket, $ticketLabels) {
+	global $trac_db, $tickets, $labels, $users_list, $milestones, $skip_comments, $time_in_us, $verbose;
+	$res = $trac_db->query("SELECT ticket_change.* FROM ticket_change, ticket WHERE ticket.id = ticket_change.ticket AND ticket = $ticket ORDER BY ticket, time, field <> 'comment'");
+	foreach ($res->fetchAll() as $row) {
+		if ($verbose) print_r($row);
+		if (!isset($tickets[$row['ticket']])) {
+			echo "Skipping comment " . $row['time'] . " on unknown ticket " . $row['ticket'] . "\n";
+			continue;
+		}
+		$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
+		if ($row['field'] == 'comment') {
+			if ($row['newvalue'] != '') {
+				$text = '**Comment by ' . $row['author'] . ' on ' . $timestamp . "**\n" . $row['newvalue'];
+			} else {
+				$text = '**Modified by ' . $row['author'] . ' on ' . $timestamp . "**";
+			}
+			$resp = github_add_comment($tickets[$row['ticket']], translate_markup($text));
+		} else if (in_array($row['field'], ['component', 'priority', 'type', 'resolution'])) {
+			if (in_array($labels[strtoupper($row['field'])[0]][crc32($row['oldvalue'])], $ticketLabels)) {
+				$index = array_search($labels[strtoupper($row['field'])[0]][crc32($row['oldvalue'])], $ticketLabels);
+				$ticketLabels[$index] = $labels[strtoupper($row['field'])[0]][crc32($row['newvalue'])];
+			} else {
+				$ticketLabels[] = $labels[strtoupper($row['field'])[0]][crc32($row['newvalue'])];
+			}
+			$resp = github_update_issue($tickets[$ticket], array(
+						'labels' => array_values(array_filter($ticketLabels, 'strlen'))
+						));
+		} else if ($row['field'] == 'status') {
+			$resp = github_update_issue($tickets[$ticket], array(
+						'state' => ($row['newvalue'] == 'closed') ? 'closed' : 'open'
+						));
+		} else if ($row['field'] == 'summary') {
+			$resp = github_update_issue($tickets[$ticket], array(
+						'title' => $row['newvalue']
+						));
+		} else if (false and $row['field'] == 'description') { // TODO?
+			$body = make_body($row['newvalue']);
+			$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
+			// TODO:
+			//$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
+
+			$resp = github_update_issue($tickets[$ticket], array(
+						'body' => $body
+						));
+		} else if ($row['field'] == 'owner') {
+			if (!empty($row['newvalue'])) {
+				$assignee = isset($users_list[$row['newvalue']]) ? $users_list[$row['newvalue']] : NULL;
+			} else {
+				$assignee = NULL;
+			}
+			$resp = github_update_issue($tickets[$ticket], array(
+						'assignee' => $assignee
+						));
+		} else if ($row['field'] == 'milestone') {
+			if (empty($row['newvalue'])) {
+				$milestone = NULL;
+			} else {
+				$milestone = $milestones[crc32($row['newvalue'])];
+			}
+			$resp = github_update_issue($tickets[$ticket], array(
+						'milestone' => $milestone
+						));
+		} else {
+			echo "WARNING: ignoring change of {$row['field']} to {$row['newvalue']}\n";
+			continue;
+		}
 		if (isset($resp['url'])) {
 			// OK
-			echo "Added comment {$resp['url']}\n";
+			echo "Added change {$resp['url']}\n";
 		} else {
 			// Error
 			$error = print_r($resp, 1);
-			echo "Failed to add a comment: $error\n";
+			echo "Failed to add a comment for " . $row['ticket'] . ": $error\n";
+			return false;
 		}
+		// Wait 1sec to ensure the next event will be after
+		// just added (apparently github can reorder
+		// changes/comments if added too fast)
+		sleep(1);
 	}
+	return true;
 }
 
-echo "Done whatever possible, sorry if not.\n";
-
-function github_post($url, $json, $patch = false) {
+function github_req($url, $json, $patch = false, $post = true) {
 	global $username, $password;
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_USERPWD, "$username:$password");
@@ -314,11 +449,15 @@ function github_post($url, $json, $patch = false) {
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 	curl_setopt($ch, CURLOPT_HEADER, false);
-	curl_setopt($ch, CURLOPT_POST, true);
+	curl_setopt($ch, CURLOPT_POST, $post);
 	curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
 	curl_setopt($ch, CURLOPT_USERAGENT, "trac2github for $project, admin@example.com");
 	if ($patch) {
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+	} else if ($post) {
+		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+	} else {
+		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
 	}
 	$ret = curl_exec($ch);
 	if (!$ret) {
@@ -331,31 +470,43 @@ function github_post($url, $json, $patch = false) {
 function github_add_milestone($data) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($data);
-	return json_decode(github_post("/repos/$project/$repo/milestones", json_encode($data)), true);
+	return json_decode(github_req("/repos/$project/$repo/milestones", json_encode($data)), true);
 }
 
 function github_add_label($data) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($data);
-	return json_decode(github_post("/repos/$project/$repo/labels", json_encode($data)), true);
+	return json_decode(github_req("/repos/$project/$repo/labels", json_encode($data)), true);
 }
 
 function github_add_issue($data) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($data);
-	return json_decode(github_post("/repos/$project/$repo/issues", json_encode($data)), true);
+	return json_decode(github_req("/repos/$project/$repo/issues", json_encode($data)), true);
 }
 
 function github_add_comment($issue, $body) {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($body);
-	return json_decode(github_post("/repos/$project/$repo/issues/$issue/comments", json_encode(array('body' => $body))), true);
+	return json_decode(github_req("/repos/$project/$repo/issues/$issue/comments", json_encode(array('body' => $body))), true);
 }
 
 function github_update_issue($issue, $data) {
 	global $project, $repo, $verbose;
+	if ($verbose) print_r($data);
+	return json_decode(github_req("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
+}
+
+function github_get_milestones() {
+	global $project, $repo, $verbose;
 	if ($verbose) print_r($body);
-	return json_decode(github_post("/repos/$project/$repo/issues/$issue", json_encode($data), true), true);
+	return json_decode(github_req("/repos/$project/$repo/milestones?per_page=100&state=all", false, false, false), true);
+}
+
+function github_get_labels() {
+	global $project, $repo, $verbose;
+	if ($verbose) print_r($body);
+	return json_decode(github_req("/repos/$project/$repo/labels?per_page=100", false, false, false), true);
 }
 
 function make_body($description) {
