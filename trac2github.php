@@ -503,7 +503,7 @@ function github_get_milestones() {
 function github_get_labels() {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($body);
-	return json_decode(github_req("/repos/$project/$repo/labels?per_page=100", false, false, false), true);
+	return array_merge(json_decode(github_req("/repos/$project/$repo/labels?per_page=100", false, false, false), true), json_decode(github_req("/repos/$project/$repo/labels?page=2&per_page=100", false, false, false), true));
 }
 
 function make_body($description) {
