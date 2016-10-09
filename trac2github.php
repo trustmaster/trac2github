@@ -119,9 +119,6 @@ switch ($pdo_driver) {
 // Set PDO to throw exceptions on error.
 $trac_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-// Boolean used to divide times by 1000000 when using Postgres where times are stored in microsecs (bigint)
-$time_in_us=($pdo_driver == 'pgsql' || $pdo_driver == 'sqlite');
-
 echo "Connected to Trac\n";
 
 //if restriction to certain components is added, put this in the SQL string
@@ -144,7 +141,7 @@ if (!$skip_milestones) {
 			continue;
 		}
 		//$milestones[$row['name']] = ++$mnum;
-		$epochInSecs = (int) ($row['due']/($time_in_us? 1000000:1));
+		$epochInSecs = (int) ($row['due']/1000000));
 		echo "due : ".date('Y-m-d\TH:i:s\Z', $epochInSecs)."\n";
 		$resp = github_add_milestone(array(
 			'title' => $row['name'],
@@ -290,7 +287,7 @@ if (!$skip_tickets) {
 		}
 
 		$body = make_body($row['description']);
-		$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
+		$timestamp = date("j M Y H:i e", $row['time']/1000000);
 		$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
 		if (empty($row['milestone'])) {
@@ -359,7 +356,7 @@ function trac_orig_value($ticket, $field) {
 }
 
 function add_changes_for_ticket($ticket, $ticketLabels) {
-	global $trac_db, $tickets, $labels, $users_list, $milestones, $skip_comments, $time_in_us, $verbose;
+	global $trac_db, $tickets, $labels, $users_list, $milestones, $skip_comments, $verbose;
 	$res = $trac_db->query("SELECT ticket_change.* FROM ticket_change, ticket WHERE ticket.id = ticket_change.ticket AND ticket = $ticket ORDER BY ticket, time, field <> 'comment'");
 	foreach ($res->fetchAll() as $row) {
 		if ($verbose) print_r($row);
@@ -367,7 +364,7 @@ function add_changes_for_ticket($ticket, $ticketLabels) {
 			echo "Skipping comment " . $row['time'] . " on unknown ticket " . $row['ticket'] . "\n";
 			continue;
 		}
-		$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
+		$timestamp = date("j M Y H:i e", $row['time']/1000000);
 		if ($row['field'] == 'comment') {
 			if ($row['newvalue'] != '') {
 				$text = '**Comment by ' . $row['author'] . ' on ' . $timestamp . "**\n" . $row['newvalue'];
@@ -395,7 +392,7 @@ function add_changes_for_ticket($ticket, $ticketLabels) {
 						));
 		} else if (false and $row['field'] == 'description') { // TODO?
 			$body = make_body($row['newvalue']);
-			$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
+			$timestamp = date("j M Y H:i e", $row['time']/1000000);
 			// TODO:
 			//$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
