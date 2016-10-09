@@ -141,7 +141,7 @@ if (!$skip_milestones) {
 			continue;
 		}
 		//$milestones[$row['name']] = ++$mnum;
-		$epochInSecs = (int) ($row['due']/1000000));
+		$epochInSecs = (int) ($row['due']/1000000);
 		echo "due : ".date('Y-m-d\TH:i:s\Z', $epochInSecs)."\n";
 		$resp = github_add_milestone(array(
 			'title' => $row['name'],
