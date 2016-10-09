@@ -195,7 +195,7 @@ if (!$skip_labels) {
 		$existing_labels[] = urldecode($l['name']);
 	}
 	foreach ($res->fetchAll() as $row) {
-		$label_name = $row['label_type'] . ': ' . $row['name'];
+		$label_name = $row['label_type'] . ': ' . str_replace(",", "", $row['name']);
 		if (array_key_exists($label_name, $remap_labels)) {
 			$label_name = $remap_labels[$label_name];
 		}
