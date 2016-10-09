@@ -17,7 +17,7 @@ $repo       = 'Organization or User name';
 
 // All users must be valid github logins!
 $users_list = array(
-	'TracUsermame' => 'GithubUsername',
+	'TracUsername' => 'GithubUsername',
 	'Trustmaster' => 'trustmaster',
 	'John.Done' => 'johndoe'
 );
