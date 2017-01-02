@@ -127,7 +127,7 @@ echo "Connected to Trac\n";
 //if restriction to certain components is added, put this in the SQL string
 if ($use_components && is_array($use_components)) $my_components = " AND component IN ('".implode("', '", $use_components)."') ";
 else $my_components = "";
-	
+
 $milestones = array();
 
 if (!$skip_milestones) {
@@ -146,12 +146,21 @@ if (!$skip_milestones) {
 		//$milestones[$row['name']] = ++$mnum;
 		$epochInSecs = (int) ($row['due']/($time_in_us? 1000000:1));
 		echo "due : ".date('Y-m-d\TH:i:s\Z', $epochInSecs)."\n";
-		$resp = github_add_milestone(array(
-			'title' => $row['name'],
-			'state' => $row['completed'] == 0 ? 'open' : 'closed',
-			'description' => empty($row['description']) ? 'None' : $row['description'],
-			'due_on' => date('Y-m-d\TH:i:s\Z', $epochInSecs)
-		));
+		if ($epochInSecs == 0) {
+			$resp = github_add_milestone(array(
+				'title' => $row['name'],
+				'state' => $row['completed'] == 0 ? 'open' : 'closed',
+				'description' => empty($row['description']) ? '' : translate_markup($row['description'])
+			));
+		}
+		else {
+			$resp = github_add_milestone(array(
+				'title' => $row['name'],
+				'state' => $row['completed'] == 0 ? 'open' : 'closed',
+				'description' => empty($row['description']) ? '' : translate_markup($row['description']),
+				'due_on' => date('Y-m-d\TH:i:s\Z', $epochInSecs)
+			));
+		}
 		if (isset($resp['number'])) {
 			// OK
 			$milestones[crc32($row['name'])] = (int) $resp['number'];
@@ -237,7 +246,7 @@ if (file_exists($save_tickets)) {
 if (!$skip_tickets) {
 	// Export tickets
 	$limit = $ticket_limit > 0 ? "LIMIT $ticket_offset, $ticket_limit" : '';
-		
+
 	$res = $trac_db->query("SELECT * FROM ticket WHERE 1=1 $my_components ORDER BY id $limit");
 	foreach ($res->fetchAll() as $row) {
 		if (isset($last_ticket_number) and $ticket_try_preserve_numbers) {
@@ -247,19 +256,19 @@ if (!$skip_tickets) {
 			}
 			while ($last_ticket_number < $row['id']-1) {
 				$resp = github_add_issue(array(
-							'title' => "Placeholder",
+					'title' => "Placeholder",
 							'body' => "This is a placeholder created during migration to preserve original issue numbers.",
-							'milestone' => NULL,
-							'labels' => array()
-						      ));
+					'milestone' => NULL,
+					'labels' => array()
+					));
 				if (isset($resp['number'])) {
 					// OK
 					$last_ticket_number = $resp['number'];
 					echo "Created placeholder issue #{$resp['number']}\n";
 					$resp = github_update_issue($resp['number'], array(
-								'state' => 'closed',
-								'labels' => array('invalid'),
-								));
+						'state' => 'closed',
+						'labels' => array('invalid'),
+						));
 					if (isset($resp['number'])) {
 						echo "Closed issue #{$resp['number']}\n";
 					}
@@ -387,8 +396,8 @@ function add_changes_for_ticket($ticket, $ticketLabels) {
 						));
 		} else if ($row['field'] == 'status') {
 			$resp = github_update_issue($tickets[$ticket], array(
-						'state' => ($row['newvalue'] == 'closed') ? 'closed' : 'open'
-						));
+				'state' => ($row['newvalue'] == 'closed') ? 'closed' : 'open'
+				));
 		} else if ($row['field'] == 'summary') {
 			$resp = github_update_issue($tickets[$ticket], array(
 						'title' => $row['newvalue']
@@ -418,8 +427,8 @@ function add_changes_for_ticket($ticket, $ticketLabels) {
 				$milestone = $milestones[crc32($row['newvalue'])];
 			}
 			$resp = github_update_issue($tickets[$ticket], array(
-						'milestone' => $milestone
-						));
+				'milestone' => $milestone
+				));
 		} else {
 			echo "WARNING: ignoring change of {$row['field']} to {$row['newvalue']}\n";
 			continue;
