@@ -17,7 +17,7 @@ $repo       = 'Organization or User name';
 
 // All users must be valid github logins!
 $users_list = array(
-	'TracUsermame' => 'GithubUsername',
+	'TracUsername' => 'GithubUsername',
 	'Trustmaster' => 'trustmaster',
 	'John.Done' => 'johndoe'
 );
@@ -75,6 +75,8 @@ $save_tickets = '/tmp/trac_tickets.list';
 // Set this to true if you want to see the JSON output sent to GitHub
 $verbose = false;
 
+$request_count = 0;
+
 // Uncomment to refresh cache
 // @unlink($save_milestones);
 // @unlink($save_labels);
@@ -94,7 +96,7 @@ date_default_timezone_set("UTC");
 // Connect to Trac database using PDO
 switch ($pdo_driver) {
 	case 'mysql':
-		$trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac, $mysqluser_trac, $mysqlpassword_trac);
+		$trac_db = new PDO('mysql:host='.$mysqlhost_trac.';dbname='.$mysqldb_trac . ';charset=utf8', $mysqluser_trac, $mysqlpassword_trac);
 		break;
 
 	case 'sqlite':
@@ -119,15 +121,12 @@ switch ($pdo_driver) {
 // Set PDO to throw exceptions on error.
 $trac_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-// Boolean used to divide times by 1000000 when using Postgres where times are stored in microsecs (bigint)
-$time_in_us=($pdo_driver == 'pgsql' || $pdo_driver == 'sqlite');
-
 echo "Connected to Trac\n";
 
 //if restriction to certain components is added, put this in the SQL string
 if ($use_components && is_array($use_components)) $my_components = " AND component IN ('".implode("', '", $use_components)."') ";
 else $my_components = "";
-	
+
 $milestones = array();
 
 if (!$skip_milestones) {
@@ -144,7 +143,7 @@ if (!$skip_milestones) {
 			continue;
 		}
 		//$milestones[$row['name']] = ++$mnum;
-		$epochInSecs = (int) ($row['due']/($time_in_us? 1000000:1));
+		$epochInSecs = (int) ($row['due']/1000000);
 		echo "due : ".date('Y-m-d\TH:i:s\Z', $epochInSecs)."\n";
 		$resp = github_add_milestone(array(
 			'title' => $row['name'],
@@ -198,7 +197,7 @@ if (!$skip_labels) {
 		$existing_labels[] = urldecode($l['name']);
 	}
 	foreach ($res->fetchAll() as $row) {
-		$label_name = $row['label_type'] . ': ' . $row['name'];
+		$label_name = $row['label_type'] . ': ' . str_replace(",", "", $row['name']);
 		if (array_key_exists($label_name, $remap_labels)) {
 			$label_name = $remap_labels[$label_name];
 		}
@@ -237,7 +236,7 @@ if (file_exists($save_tickets)) {
 if (!$skip_tickets) {
 	// Export tickets
 	$limit = $ticket_limit > 0 ? "LIMIT $ticket_offset, $ticket_limit" : '';
-		
+
 	$res = $trac_db->query("SELECT * FROM ticket WHERE 1=1 $my_components ORDER BY id $limit");
 	foreach ($res->fetchAll() as $row) {
 		if (isset($last_ticket_number) and $ticket_try_preserve_numbers) {
@@ -290,7 +289,7 @@ if (!$skip_tickets) {
 		}
 
 		$body = make_body($row['description']);
-		$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
+		$timestamp = date("j M Y H:i e", $row['time']/1000000);
 		$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
 		if (empty($row['milestone'])) {
@@ -359,7 +358,7 @@ function trac_orig_value($ticket, $field) {
 }
 
 function add_changes_for_ticket($ticket, $ticketLabels) {
-	global $trac_db, $tickets, $labels, $users_list, $milestones, $skip_comments, $time_in_us, $verbose;
+	global $trac_db, $tickets, $labels, $users_list, $milestones, $skip_comments, $verbose;
 	$res = $trac_db->query("SELECT ticket_change.* FROM ticket_change, ticket WHERE ticket.id = ticket_change.ticket AND ticket = $ticket ORDER BY ticket, time, field <> 'comment'");
 	foreach ($res->fetchAll() as $row) {
 		if ($verbose) print_r($row);
@@ -367,7 +366,7 @@ function add_changes_for_ticket($ticket, $ticketLabels) {
 			echo "Skipping comment " . $row['time'] . " on unknown ticket " . $row['ticket'] . "\n";
 			continue;
 		}
-		$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
+		$timestamp = date("j M Y H:i e", $row['time']/1000000);
 		if ($row['field'] == 'comment') {
 			if ($row['newvalue'] != '') {
 				$text = '**Comment by ' . $row['author'] . ' on ' . $timestamp . "**\n" . $row['newvalue'];
@@ -395,7 +394,7 @@ function add_changes_for_ticket($ticket, $ticketLabels) {
 						));
 		} else if (false and $row['field'] == 'description') { // TODO?
 			$body = make_body($row['newvalue']);
-			$timestamp = date("j M Y H:i e", $row['time']/($time_in_us? 1000000:1));
+			$timestamp = date("j M Y H:i e", $row['time']/1000000);
 			// TODO:
 			//$body = '**Reported by ' . obfuscate_email($row['reporter']) . ' on ' . $timestamp . "**\n" . $body;
 
@@ -442,13 +441,13 @@ function add_changes_for_ticket($ticket, $ticketLabels) {
 }
 
 function github_req($url, $json, $patch = false, $post = true) {
-	global $username, $password;
+	global $username, $password, $request_count;
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_USERPWD, "$username:$password");
 	curl_setopt($ch, CURLOPT_URL, "https://api.github.com$url");
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-	curl_setopt($ch, CURLOPT_HEADER, false);
+	curl_setopt($ch, CURLOPT_HEADER, true);
 	curl_setopt($ch, CURLOPT_POST, $post);
 	curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
 	curl_setopt($ch, CURLOPT_USERAGENT, "trac2github for $project, admin@example.com");
@@ -460,11 +459,27 @@ function github_req($url, $json, $patch = false, $post = true) {
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
 	}
 	$ret = curl_exec($ch);
+
+	$header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+	$header = substr($ret, 0, $header_size);
+	$body = substr($ret, $header_size);
+
+	if ($verbose) print_r($header);
 	if (!$ret) {
 		trigger_error(curl_error($ch));
 	}
 	curl_close($ch);
-	return $ret;
+
+	if ($patch || $post) {
+		$request_count++;
+		if($request_count > 50) {
+			sleep(70);
+			$request_count = 0;
+		}
+
+	}
+
+	return $body;
 }
 
 function github_add_milestone($data) {
@@ -506,7 +521,7 @@ function github_get_milestones() {
 function github_get_labels() {
 	global $project, $repo, $verbose;
 	if ($verbose) print_r($body);
-	return json_decode(github_req("/repos/$project/$repo/labels?per_page=100", false, false, false), true);
+	return array_merge(json_decode(github_req("/repos/$project/$repo/labels?per_page=100", false, false, false), true), json_decode(github_req("/repos/$project/$repo/labels?page=2&per_page=100", false, false, false), true));
 }
 
 function make_body($description) {
